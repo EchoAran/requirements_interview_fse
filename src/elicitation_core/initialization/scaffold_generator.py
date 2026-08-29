@@ -102,7 +102,7 @@ class ScaffoldGenerator:
                 SectionState(
                     section_id="section_emergent",
                     section_number="section-emergent",
-                    section_content="运行时新增关注点",
+                    section_content="Runtime Emergent Concerns",
                     topics=[],
                 )
             )

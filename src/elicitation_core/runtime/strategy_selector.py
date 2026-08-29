@@ -7,34 +7,34 @@ from ..services.state_view import StateView
 
 STRATEGY_INSTRUCTIONS: dict[str, str] = {
     "explore": (
-        "阶段：初始探索阶段；\n"
-        "核心目标：引导受访者结合实际场景自然概述主题核心，不预先罗列具体槽位；\n"
-        "提问要点：采用开放式提问，避免引导性暗示或技术术语，保持自然对话风格。"
+        "Phase: Initial Exploration;\n"
+        "Core Objective: Guide the interviewee to give an overarching narrative of the topic based on their actual business context, without enumerating discrete slot lists upfront;\n"
+        "Key Guidelines: Use open-ended questions, avoid leading suggestions or technical jargon, and maintain a natural conversational dialog."
     ),
     "fill_gap": (
-        "阶段：填补缺口阶段；\n"
-        "核心目标：聚焦当前最关键的目标空缺信息点，引导用户补充缺失事实；\n"
-        "提问要点：明确指向目标空缺槽位，提问简洁具体，通俗易懂，避免一次性抛出清单式问题。"
+        "Phase: Information Gap Filling;\n"
+        "Core Objective: Focus directly on the most critical missing requirement slot and prompt the user to supply the missing factual information;\n"
+        "Key Guidelines: Explicitly point to the target slot, keep the question concise, concrete, and easily understood, and avoid compound questionnaire lists."
     ),
     "deepen": (
-        "阶段：深度挖掘阶段；\n"
-        "核心目标：围绕已有信息深挖隐性需求、澄清模糊边界与异常场景，补充具体细节；\n"
-        "提问要点：紧扣已有回答提问，聚焦使用场景细节、特殊处理边界或不确定项。"
+        "Phase: Deep Elicitation & Edge Case Exploration;\n"
+        "Core Objective: Probe deeper into implicit requirements, clarify ambiguous operational boundaries, and uncover exception handling scenarios based on existing facts;\n"
+        "Key Guidelines: Ground the question firmly in previously given answers, focusing on concrete workflow nuances, boundary rules, or uncertainties."
     ),
     "resolve_conflict": (
-        "阶段：冲突化解阶段；\n"
-        "核心目标：针对已记录的两种不同或矛盾说法，引导受访者澄清实际规则或适用条件；\n"
-        "提问要点：中立客观地呈现已有两种说法，礼貌请受访者确认哪种为准或在何种条件下适用。"
+        "Phase: Conflict Resolution;\n"
+        "Core Objective: Address two diverging or contradictory statements recorded for a requirement item, guiding the interviewee to clarify the authoritative business rule or applicable conditions;\n"
+        "Key Guidelines: Neutrally and objectively present both recorded viewpoints, politely asking the interviewee to confirm which rule applies or under what circumstances."
     ),
     "verify": (
-        "阶段：闭环确认阶段；\n"
-        "核心目标：简短总结当前主题已收集确认的关键需求信息，向受访者确认是否完整准确；\n"
-        "提问要点：简洁汇总主要信息点，询问是否还有需要修正或补充的内容，没有补充则准备过渡。"
+        "Phase: Synthesis & Verification;\n"
+        "Core Objective: Concisely synthesize the key confirmed requirement points under the active topic and verify accuracy and completeness with the interviewee;\n"
+        "Key Guidelines: Briefly summarize established points, asking if anything needs revision or addition before transitioning forward."
     ),
     "confirm_control": (
-        "阶段：控制意图确认阶段；\n"
-        "核心目标：向受访者确认是否希望切换/拒绝/结束当前主题，不混入新的业务需求问题；\n"
-        "提问要点：提出明确的二选一或确认提问，语气礼貌客气，避免直接擅自决定。"
+        "Phase: Control Intent Confirmation;\n"
+        "Core Objective: Clarify whether the interviewee wishes to switch, skip, or conclude the current discussion, without introducing new domain requirement questions;\n"
+        "Key Guidelines: Ask a clear confirmation or choice question with a polite tone, avoiding unilateral assumptions."
     ),
 }
 

@@ -75,7 +75,7 @@ class QuestionContextBuilder:
                     target_relations.append({
                         "source": src_title,
                         "target": tgt_title,
-                        "description": f"【{tgt_title}】依赖于【{src_title}】",
+                        "description": f"'{tgt_title}' depends on '{src_title}'",
                     })
 
 

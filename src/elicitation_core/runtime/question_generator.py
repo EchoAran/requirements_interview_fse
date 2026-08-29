@@ -57,7 +57,7 @@ class QuestionGenerator:
             slots_repr = [
                 {
                     "item_name": s.key,
-                    "recorded_value": s.value if s.value is not None else "（未提供）",
+                    "recorded_value": s.value if s.value is not None else "[Not provided]",
                 }
                 for s in item.filled_slots
             ]
@@ -70,76 +70,76 @@ class QuestionGenerator:
         strat = plan.strategy
         tc = input_data.target_context
 
-        target_desc = "推动访谈顺利开展。"
-        evidence_desc = "（无指定证据）"
+        target_desc = "Advance the interview dialogue smoothly."
+        evidence_desc = "(No specific evidence attached)"
 
         if strat == "fill_gap":
             if tc and tc.target_slots:
                 target_slot = tc.target_slots[0]
-                target_desc = f"针对缺失信息项【{target_slot.semantic_key}】进行自然询问。"
+                target_desc = f"Inquire naturally about the missing information item '{target_slot.semantic_key}'."
                 if target_slot.evidence_snippets:
                     evidence_desc = "\n".join(f'- "{snip.content}"' for snip in target_slot.evidence_snippets)
             else:
-                target_desc = "针对当前主题的关键缺失信息进行补充提问。"
+                target_desc = "Inquire about key missing information items under the active topic."
 
         elif strat == "deepen":
             if tc and tc.target_slots:
                 target_slot = tc.target_slots[0]
-                val_repr = f"（当前已知内容: {target_slot.current_value}）" if target_slot.current_value else ""
-                target_desc = f"针对已知信息【{target_slot.semantic_key}】{val_repr}进一步深入挖掘具体使用场景、细化要求或边界。"
+                val_repr = f" (Current known value: {target_slot.current_value})" if target_slot.current_value else ""
+                target_desc = f"Probe deeper into concrete use scenarios, refined constraints, or operational boundaries for known item '{target_slot.semantic_key}'{val_repr}."
                 if target_slot.evidence_snippets:
                     evidence_desc = "\n".join(f'- "{snip.content}"' for snip in target_slot.evidence_snippets)
             else:
-                target_desc = "针对当前主题已有的信息进一步深挖细节与实际场景。"
+                target_desc = "Probe deeper into specific details and operational scenarios for existing information under the active topic."
 
         elif strat == "resolve_conflict":
             if tc and tc.conflict_claims:
-                lines = ["针对存在矛盾冲突的说法进行中立呈现与澄清，请受访者确认哪种为实际规则。"]
+                lines = ["Objectively present and clarify conflicting statements, asking the interviewee to confirm the authoritative rule."]
                 ev_lines = []
                 for key, claims in tc.conflict_claims.items():
-                    lines.append(f"关于【{key}】存在不同记录：")
+                    lines.append(f"Diverging records for '{key}':")
                     for idx, claim in enumerate(claims, 1):
-                        lines.append(f"  说法{idx}: {claim.value}")
+                        lines.append(f"  Statement {idx}: {claim.value}")
                         for snip in claim.evidence_snippets:
-                            ev_lines.append(f'- 说法{idx}支持证据: "{snip.content}"')
+                            ev_lines.append(f'- Statement {idx} supporting evidence: "{snip.content}"')
                 target_desc = "\n".join(lines)
                 if ev_lines:
                     evidence_desc = "\n".join(ev_lines)
             else:
-                target_desc = "针对当前主题中记录的矛盾表述，客观中立地向受访者请求澄清实际规则。"
+                target_desc = "Objectively request the interviewee to clarify conflicting statements recorded under the active topic."
 
         elif strat == "verify":
             if tc and tc.verify_facts:
-                lines = ["对当前主题中已梳理且有证据支持的核心事实进行总结确认："]
+                lines = ["Synthesize and verify core confirmed requirement facts under the active topic:"]
                 for f in tc.verify_facts:
                     lines.append(f"  - {f['key']}: {f['value']}")
                 target_desc = "\n".join(lines)
-                evidence_desc = "（上述事实均已在前序轮次中获取有效证据支持）"
+                evidence_desc = "(The above facts have been supported by verified evidence in preceding turns)"
             else:
-                target_desc = "对当前主题的核心需求进行简要总结，并询问受访者是否还有遗漏或补充。"
+                target_desc = "Briefly summarize key requirements under the active topic and ask the interviewee if anything is missing or needs revision."
 
         elif strat == "confirm_control":
-            intent_desc = plan.control_intent or "调整访谈流程"
+            intent_desc = plan.control_intent or "modify interview flow"
             target_topic_title = None
             if tc and tc.target_topics:
                 target_topic_title = tc.target_topics[0].topic_content
             if target_topic_title:
-                target_desc = f"检测到用户疑似希望切换到【{target_topic_title}】，请向受访者进行二选一礼貌确认（切换到该主题或继续当前主题），不要引入新业务提问。"
+                target_desc = f"Detected user intention to switch to '{target_topic_title}'. Politely ask a confirmation choice (switch to that topic or continue the active topic) without introducing new requirement inquiries."
             else:
-                target_desc = f"检测到用户疑似希望【{intent_desc}】，请向受访者进行二选一礼貌确认，不要引入新业务提问。"
+                target_desc = f"Detected user intention to '{intent_desc}'. Politely confirm their choice without introducing new requirement inquiries."
 
         elif strat == "explore":
-            target_desc = "围绕当前主题的核心场景、主要痛点和业务诉求进行开放式探索。"
+            target_desc = "Conduct open-ended exploration around core business scenarios, key objectives, and operational scope of the active topic."
 
         # If relations are present, append to target_desc
         if tc and tc.target_relations:
-            rel_lines = ["[关联依赖目标]: 请针对主题间的依赖关联进行确认与讨论："]
+            rel_lines = ["[Associated Dependencies]: Please confirm and discuss the topic dependencies:"]
             for rel in tc.target_relations:
                 desc = rel.get("description")
                 if not desc:
-                    desc = f"【{rel.get('target', '')}】依赖于【{rel.get('source', '')}】"
+                    desc = f"'{rel.get('target', '')}' depends on '{rel.get('source', '')}'"
                 rel_lines.append(f"  - {desc}")
-            if target_desc == "推动访谈顺利开展。":
+            if target_desc == "Advance the interview dialogue smoothly.":
                 target_desc = "\n".join(rel_lines)
             else:
                 target_desc = target_desc + "\n" + "\n".join(rel_lines)
@@ -161,9 +161,9 @@ class QuestionGenerator:
         current_slots_data = [
             {
                 "item_name": s.key,
-                "recorded_value": s.value if s.value is not None else "（未提供）",
-                "is_required": "必需" if s.is_required else "选填",
-                "status": "已确认" if s.state == "filled" else ("待澄清" if s.state == "conflict" else ("待细化" if s.state == "uncertain" else "未提供")),
+                "recorded_value": s.value if s.value is not None else "[Not provided]",
+                "is_required": "Required" if s.is_required else "Optional",
+                "status": "Confirmed" if s.state == "filled" else ("Conflict" if s.state == "conflict" else ("Uncertain" if s.state == "uncertain" else "Not provided")),
             }
             for s in input_data.topic_slots
         ]
@@ -190,7 +190,7 @@ class QuestionGenerator:
                 "content": t.message_content,
             })
 
-        latest_user_answer = "（访谈初始轮次，暂无用户回答）"
+        latest_user_answer = "[Initial interview round, no user response yet]"
         for t in reversed(input_data.recent_turns):
             if t.role == "Interviewee" and t.message_content:
                 latest_user_answer = t.message_content

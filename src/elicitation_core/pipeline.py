@@ -404,7 +404,7 @@ class ElicitationPipeline:
                 project_id=self.project_id,
                 turn_index=state.turn_index,
                 is_finished=True,
-                finish_message="访谈已结束。",
+                finish_message="Interview session completed.",
                 next_question="",
             )
 
@@ -620,7 +620,7 @@ class ElicitationPipeline:
                 )
                 step_events.extend([comp_top_ev, proj_event])
                 is_interview_finished = True
-                finish_msg = "您已选择结束本次访谈，感谢您的参与！"
+                finish_msg = "The interviewee chose to terminate the interview. Thank you for your participation!"
                 next_topic = None
                 selected_op_str = "end_current_topic"
 
@@ -659,7 +659,7 @@ class ElicitationPipeline:
                             kind="user_refused_and_switched",
                             from_topic_title=current_topic.topic_content,
                             to_topic_title=target_t.topic_content,
-                            user_facing_reason=f"受访者希望先跳过当前话题，接下来转向讨论【{target_t.topic_content}】",
+                            user_facing_reason=f"Interviewee requested to skip the current topic, transitioning to: '{target_t.topic_content}'",
                         )
                 else:
                     proj_event = EventFactory.create_project_status_changed_event(
@@ -670,7 +670,7 @@ class ElicitationPipeline:
                     )
                     step_events.append(proj_event)
                     is_interview_finished = True
-                    finish_msg = "您已拒绝当前话题，且当前访谈没有其他待讨论主题，访谈结束。感谢您的参与！"
+                    finish_msg = "The current topic was refused and no other pending topics remain. The interview session has ended. Thank you for your participation!"
                     next_topic = None
 
             elif intent_decision.intent in ("switch_existing_topic", "return_previous_topic"):
@@ -698,7 +698,7 @@ class ElicitationPipeline:
                         kind="user_requested_switch",
                         from_topic_title=current_topic.topic_content,
                         to_topic_title=target_t.topic_content,
-                        user_facing_reason=f"根据您的意愿，我们将转向讨论【{target_t.topic_content}】",
+                        user_facing_reason=f"Per your request, transitioning to: '{target_t.topic_content}'",
                     )
                 else:
                     next_topic = current_topic
@@ -711,7 +711,7 @@ class ElicitationPipeline:
             selected_op_str = "maintain_current_topic"
             transition = QuestionTransition(
                 kind="confirm_control",
-                user_facing_reason="请确认是否调整讨论方向",
+                user_facing_reason="Please confirm whether you would like to adjust the discussion direction.",
             )
 
         else:
@@ -745,7 +745,7 @@ class ElicitationPipeline:
                             kind="scheduler_switched",
                             from_topic_title=current_topic.topic_content,
                             to_topic_title=best_t.topic_content,
-                            user_facing_reason=f"当前话题基本梳理清晰，接下来进入【{best_t.topic_content}】的讨论",
+                            user_facing_reason=f"Current topic is sufficiently covered, transitioning to: '{best_t.topic_content}'",
                         )
                     else:
                         next_topic = current_topic
@@ -760,7 +760,7 @@ class ElicitationPipeline:
                 )
                 step_events.append(proj_event)
                 is_interview_finished = True
-                finish_msg = "我们的访谈可以结束了，感谢您抽出时间配合，所有核心需求已完成收集。"
+                finish_msg = "All core requirement topics have been sufficiently explored. The interview is now complete. Thank you for your valuable time and participation!"
                 next_topic = None
                 selected_op_str = "end_current_topic"
 
@@ -972,7 +972,7 @@ class ElicitationPipeline:
             project_id=self.project_id,
             turn_index=state.turn_index,
             is_finished=True,
-            finish_message="访谈已顺利结束并完成归档。",
+            finish_message="Interview session successfully completed and archived.",
             next_question="",
             state_events=finish_events,
         )

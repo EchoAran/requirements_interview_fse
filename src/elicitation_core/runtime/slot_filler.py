@@ -86,7 +86,7 @@ class SlotFiller:
                 continue
             s_num = str(item.get("slot_number", "")).strip()
             s_key = str(item.get("slot_key", "")).strip() or None
-            s_val_raw = item.get("slot_value")
+            s_val_raw = item.get("new_value") if "new_value" in item else item.get("slot_value")
             proposed_op = str(item.get("operation", "")).strip().lower() or None
 
             if s_val_raw in (None, "None", ""):

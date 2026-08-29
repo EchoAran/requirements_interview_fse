@@ -157,7 +157,7 @@ class IntentController:
                     target_topic_id=None,
                     target_topic_number=str(raw_target) if raw_target else None,
                     needs_confirmation=True,
-                    raw_explanation=f"用户请求换题但未匹配到目录中有效主题: {raw_target}",
+                    raw_explanation=f"User requested topic switch/return but target was not found in catalog: {raw_target}",
                 )
             else:
                 return IntentDecision(
@@ -166,7 +166,7 @@ class IntentController:
                     target_topic_id=None,
                     target_topic_number=None,
                     needs_confirmation=False,
-                    raw_explanation="换题目标未匹配且置信度低，按普通内容处理",
+                    raw_explanation="Topic target was unmatched and confidence is below threshold; treating as standard content",
                 )
 
         # Confidence Calibration & Thresholding

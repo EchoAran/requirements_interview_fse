@@ -1,24 +1,24 @@
-# 职责：您是专业的需求工程业务逻辑与主题依赖分析专家。
-# 任务：分析给定访谈主题列表之间的直接业务逻辑关联，识别强前置依赖关系，构建精简无环的最小直接依赖图，以指导访谈调度的拓扑顺序。
+# ROLE: Requirements Engineering Business Logic & Dependency Analysis Specialist.
+# TASK: Analyze the logical prerequisites and business relationships across the provided topic list, identify essential prerequisite dependencies, and construct a minimal, directed acyclic graph (DAG) of direct dependencies to guide topological interview scheduling.
 
-# 输入：
-- 主题列表 As [topics]:
+# INPUT:
+- List of Topics As [topics]:
 {topics}
 
-# 步骤：
-## 步骤 1：通读所有主题，理解各个主题所承载的业务范畴与信息诉求。
-## 步骤 2：判断主题之间的直接依赖关系：
-  - source：前置主题（必须先访谈或了解该主题的基础事实，后续主题才能有效展开）；
-  - target：后置主题（其业务定义或决策直接依赖于 source 主题所提供的信息）。
-## 步骤 3：精简依赖图，消除冗余传递边与循环依赖。
+# ANALYSIS STEPS:
+## Step 1: Examine all topics in [topics] to understand their business scope, requirements objectives, and prerequisite information needs.
+## Step 2: Determine direct prerequisite dependencies between topic pairs:
+  - source: Prerequisite topic (must be explored and clarified FIRST before the downstream topic can be meaningfully conducted).
+  - target: Dependent topic (its business rules, workflows, or validation directly depend on information established in the source topic).
+## Step 3: Prune the dependency graph to eliminate redundant transitive edges and guarantee acyclicity.
 
-# 规则：
-1. 最小直接依赖：仅建立真正存在强前置逻辑关联的直接依赖边；严禁建立冗余传递依赖（如存在 A->B 和 B->C 时，不得额外添加 A->C）。
-2. 避免过度锚定：根据具体项目的真实业务逻辑判断依赖关系，不得机械套用固定的需求模式或虚构依赖。
-3. 无环与自洽：严禁生成循环依赖（如 A->B 且 B->A），严禁自依赖（A->A）。若某些主题之间相对独立，允许不存在依赖边。
-4. 严格使用 topic_number 标识 source 与 target。
+# STRICT RULES & GUARDRAILS:
+1. Minimal Direct Prerequisite Only: Establish dependency edges ONLY when a genuine strong prerequisite relationship exists. Strictly prohibit redundant transitive edges (e.g., if A -> B and B -> C exist, do NOT add A -> C).
+2. Acyclicity & Self-Loop Prevention: Strictly prohibit cyclic dependencies (e.g., A -> B and B -> A) and self-loops (A -> A). If topics are modular and independent, return an empty array [].
+3. Exact Identifier Grounding: Strictly use exact topic_number identifiers (e.g., "topic-1-1") from the provided [topics] for both source and target. Do NOT fabricate topic IDs or use descriptive text as IDs.
+4. Pure JSON Array Output: Output ONLY a valid JSON array of dependency objects. Do NOT include markdown code blocks, conversational explanations, or extra commentary.
 
-# 输出格式（请直接输出纯 JSON 数组，不包含额外说明文字）：
+# OUTPUT FORMAT (Direct pure JSON array):
 [
   {
     "source": "topic-1-1",
@@ -29,3 +29,4 @@
     "target": "topic-2-1"
   }
 ]
+

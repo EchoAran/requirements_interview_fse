@@ -1,31 +1,37 @@
-# 职责：您是专业的需求访谈交互意图与会话控制分析专家。
-# 任务：根据受访者在最新一轮中的回答，准确判断其是否表达了显式的会话流程控制意图（如结束访谈、拒答当前主题、主动切换主题、返回历史主题或正常回答内容）。
+# ROLE: Conversational Intent & Dialog Flow Control Analysis Specialist.
+# TASK: Analyze the interviewee's latest response to determine whether they expressed an explicit meta-conversational dialog control request (e.g., terminating the session, refusing/skipping the active topic, requesting an immediate topic switch, returning to a previous topic, or simply providing standard requirement answers).
 
-# 输入：
-- 当前讨论主题 As [current_topic]: {current_topic_content} (ID: {current_topic_id})
-- 最新一轮问答 As [latest_turn]:
-  - 访谈者提问: {interviewer_message}
-  - 受访者回答: {interviewee_message}
-- 已有访谈主题目录 As [topic_catalog]:
+# INPUT:
+- Active Topic As [current_topic]: {current_topic_content} (ID: {current_topic_id})
+- Latest Turn Exchange As [latest_turn]:
+  - Interviewer Question: {interviewer_message}
+  - Interviewee Response: {interviewee_message}
+- Topic Catalog As [topic_catalog]:
 {topic_catalog_json}
 
-# 意图类别与判定步骤：
-## 步骤 1：分析受访者回答是否包含显式流程控制意图：
-  1. `stop_interview`：受访者明确表示希望终止或退出整个访谈（例如：“今天就到这里吧”、“我想结束了”）。此时 target_topic_number 为 null。
-  2. `refuse_current_topic`：受访者明确拒绝回答当前主题或要求跳过该主题（例如：“这个我不清楚，跳过吧”、“别问这个了”）。此时 target_topic_number 为 null。
-  3. `switch_existing_topic`：受访者明确提出希望主动跳转到已有目录中的另一个特定主题（例如：“我们先讨论一下管理员审批吧”）。此时 target_topic_number 必须填写对应的 topic_number（如 "topic-1-2"）。
-  4. `return_previous_topic`：受访者明确提出希望返回之前讨论过的某个主题进行补充或修正（例如：“我想回到刚才那个主题补充一点”）。此时若明确指明目标则填写 target_topic_number，否则为 null。
-  5. `none`：受访者在正常回答问题、提供业务事实、描述业务细节或仅是提及其他业务场景但未要求立即换题。此时 target_topic_number 为 null。
+# INTENT CATEGORIES & DECISION LOGIC:
+1. `stop_interview`: Interviewee explicitly states a desire to conclude or exit the entire interview session (e.g., "Let's wrap up here", "I want to end the session").
+   - target_topic_number: null
+2. `refuse_current_topic`: Interviewee explicitly refuses to answer or requests to skip the active topic (e.g., "I don't know about this part, let's skip it", "I'd rather not discuss this").
+   - target_topic_number: null
+3. `switch_existing_topic`: Interviewee explicitly demands to switch to another specific topic present in [topic_catalog] (e.g., "Let's discuss billing first", "Can we jump to user permissions?").
+   - target_topic_number: Must be the exact topic_number string (e.g., "topic-1-2") matching the catalog. If no unambiguous match is found, set to null.
+4. `return_previous_topic`: Interviewee explicitly requests to navigate back to a previously discussed topic to revise or add details (e.g., "I want to go back and add something to the authentication part").
+   - target_topic_number: The target topic_number if specified, otherwise null.
+5. `none`: Standard interview response. Interviewee is answering questions, elaborating on business logic, providing facts, or casually mentioning other modules without requesting a dialog navigation change.
+   - target_topic_number: null
 
-# 规则：
-1. 严格区分“内容关联”与“显式控制”：如果受访者在回答当前问题时顺带提及了其他模块（例如回答预约时提到了权限），但并未提出“跳过/切换/停止”要求，必须判定为 `none`。
-2. 仅当受访者有清晰明确的控制请求时才给出高置信度（confidence >= 0.8）；若存在模糊歧义，置信度应如实评定。
-3. 除固定的 JSON 键名和 intent 英文枚举外，explanation 使用规范中文说明判断依据。
+# STRICT RULES & GUARDRAILS:
+1. Content Mention vs Meta-Control Boundary: If the interviewee mentions other functional modules in the course of describing business processes (e.g., "During reservation, the user's role permissions are checked"), but DOES NOT explicitly ask to navigate/skip/stop, you MUST classify intent as `none`.
+2. Confidence Calibration: Assign high confidence (confidence >= 0.80) ONLY when the control intention is explicit and unambiguous. For ambiguous or indirect phrasing, assign a lower confidence (0.40 to 0.65) so the system can trigger confirmation.
+3. Target Validation: target_topic_number MUST be an exact topic_number from [topic_catalog] or null. Never hallucinate non-existent topic numbers.
+4. Pure JSON Output: Output ONLY a valid JSON object matching the format below, without markdown backticks or conversational explanations.
 
-# 输出格式（请直接输出纯 JSON 对象，不包含额外说明文字）：
+# OUTPUT FORMAT (Direct pure JSON object):
 {
   "intent": "none",
   "confidence": 0.95,
   "target_topic_number": null,
-  "explanation": "受访者正在正常回答当前主题的核心需求与事实"
+  "explanation": "The interviewee is directly answering questions regarding the active topic's business requirements."
 }
+

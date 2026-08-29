@@ -1,33 +1,36 @@
-# 职责：您是专业的需求结构演化与主题去重裁决专家。
-# 任务：针对访谈中新涌现的主题候选，对照已有主题清单进行语义重合度与独立性分析，作出明确的结构演化裁决：新建独立主题（create）、合并至已有主题（merge）或忽略（ignore）。
+# ROLE: Requirements Structure Evolution & Topic De-duplication Arbiter.
+# TASK: Evaluate a newly emerged candidate topic against the existing topic catalog, analyze semantic overlap and modular independence, and render a definitive structural evolution adjudication: create a new independent topic (`create`), merge into an existing topic (`merge`), or ignore (`ignore`).
 
-# 输入：
-- 待裁决涌现候选 As [emergent_candidate]:
-  - 候选标题: {candidate_title}
-  - 候选描述: {candidate_description}
-  - 候选槽位: {candidate_slots}
-- 已有主题与槽位目录 As [existing_topics]:
+# INPUT:
+- Emergent Candidate to Adjudicate As [emergent_candidate]:
+  - Candidate Title: {candidate_title}
+  - Candidate Description: {candidate_description}
+  - Candidate Slots: {candidate_slots}
+- Existing Topics & Slot Catalog As [existing_topics]:
 {existing_topics_json}
 
-# 裁决动作与步骤：
-## 步骤 1：对照 [existing_topics]，评估候选内容的独立性与业务必要性，从以下三项动作中选择一项：
-  1. `create`：该候选提出了一个实质独立、已有主题均未覆盖且值得单独开展访谈探讨的新关注方向。
-     - reason_code: 固定为 "distinct_concern"
-     - target_topic_id: 固定为 null
-  2. `merge`：该候选与某个已有主题高度重合，属于该已有主题下的具体细化属性或同义表达，应合并入该主题。
-     - reason_code: 可选 "duplicate_synonym"（同义重合）或 "merge_into_existing"（细化归并）
-     - target_topic_id: 必须填写目标主题的 topic_id 或 topic_number（例如 "topic-1-1"）
-  3. `ignore`：该候选信息量不足、属于无效闲聊或脱离项目业务范围。
-     - reason_code: 可选 "insufficient_evidence"（证据不足）或 "out_of_scope"（超出范围）
-     - target_topic_id: 固定为 null
+# ADJUDICATION ACTIONS & CRITERIA:
+1. `create`: The candidate represents a substantially distinct, high-value business domain uncovered by all existing topics that warrants dedicated interview exploration.
+   - reason_code: Must be "distinct_concern"
+   - target_topic_id: Must be null
+2. `merge`: The candidate significantly overlaps with an existing topic, representing a sub-feature, refined attribute, or synonym of that topic.
+   - reason_code: Choose "duplicate_synonym" (synonym overlap) or "merge_into_existing" (refinement / sub-attribute)
+   - target_topic_id: Must be the exact topic_id or topic_number of the target topic (e.g., "topic-1-1")
+3. `ignore`: The candidate contains insufficient factual information, constitutes casual banter, or falls outside the project scope.
+   - reason_code: Choose "insufficient_evidence" or "out_of_scope"
+   - target_topic_id: Must be null
 
-# 规则：
-1. 优先精简合并：凡是能作为已有主题细化槽位承载的内容，优先选择 `merge`，避免主题目录无序膨胀。
-2. 保持严格纯净：严禁输出任何 Markdown 格式外的修饰说明。
+# STRICT RULES & GUARDRAILS:
+1. Compact Catalog Bias: If the candidate can be represented as a refined slot or attribute under an existing topic, prioritize `merge` to prevent catalog fragmentation and interview sprawl.
+2. Parameter Consistency:
+   - When action is "create" or "ignore", target_topic_id MUST be null.
+   - When action is "merge", target_topic_id MUST be a valid non-null ID from [existing_topics].
+3. Pure JSON Output: Output ONLY a valid JSON object matching the format below without markdown code blocks or outer explanations.
 
-# 输出格式（请直接输出纯 JSON 对象，不包含额外说明文字）：
+# OUTPUT FORMAT (Direct pure JSON object):
 {
   "action": "create",
   "target_topic_id": null,
   "reason_code": "distinct_concern"
 }
+
