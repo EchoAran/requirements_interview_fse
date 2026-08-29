@@ -36,8 +36,6 @@ from .runtime.structure_evolver import StructureEvolver
 from .runtime.slot_filler import SlotFiller
 from .runtime.intent_controller import IntentController
 from .runtime.scheduler import Scheduler
-from .runtime.operation_selector import OperationSelector
-from .runtime.topic_operator import TopicOperator
 from .runtime.strategy_selector import StrategySelector
 from .runtime.question_generator import QuestionGenerator
 
@@ -86,9 +84,7 @@ class ElicitationPipeline:
         )
         self.scheduler = Scheduler(weights=self.config.runtime.scheduler.weights)
 
-        # Strategy selection, topic operations, and follow-up question generation components
-        self.operation_selector = OperationSelector(self._llm_client, prompts_dir=prompts_dir)
-        self.topic_operator = TopicOperator(self._llm_client, prompts_dir=prompts_dir)
+        # Strategy selection and follow-up question generation components
         self.strategy_selector = StrategySelector(
             completion_threshold=self.config.runtime.strategy_completion_threshold
         )
@@ -127,11 +123,6 @@ class ElicitationPipeline:
             self.slot_filler.llm_client = client
         if hasattr(self, "intent_controller"):
             self.intent_controller.llm_client = client
-        if hasattr(self, "operation_selector"):
-            self.operation_selector.llm_client = client
-        if hasattr(self, "topic_operator"):
-            self.topic_operator.llm_client = client
-            self.topic_operator.structure_evolver.llm_client = client
         if hasattr(self, "question_generator"):
             self.question_generator.llm_client = client
 
@@ -257,13 +248,12 @@ class ElicitationPipeline:
         evidences = self.store.load_evidences(self.project_id)
         return {e.evidence_id for e in evidences}
 
-    async def initialize(self, seed_context: str = "") -> StepResult:
+    async def initialize(self) -> StepResult:
         project_name = getattr(self, "_init_project_name", "Untitled Project")
         initial_requirements = getattr(self, "_init_requirements", "")
 
         sections = await self.scaffold_generator.generate(
             initial_requirements=initial_requirements,
-            seed_context=seed_context,
         )
 
         priority = await self.dependency_builder.build(sections)

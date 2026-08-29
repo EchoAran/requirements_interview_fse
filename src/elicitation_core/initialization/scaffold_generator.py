@@ -23,10 +23,8 @@ class ScaffoldGenerator:
     async def generate(
         self,
         initial_requirements: str,
-        seed_context: str = "",
     ) -> list[SectionState]:
-        template = self._load_prompt_template()
-        prompt = template.replace("{DOMAIN_EXPERIENCE}", seed_context.strip())
+        prompt = self._load_prompt_template()
         query = f"User's input: {initial_requirements}"
         data = await self.llm_client.complete_json(
             prompt=prompt,
@@ -55,7 +53,7 @@ class ScaffoldGenerator:
                 raw_slots = top_data.get("slots", [])
                 for sl_idx, slot_data in enumerate(raw_slots, start=1):
                     slot_num = str(slot_data.get("slot_number", f"slot-{s_idx}-{t_idx}-{sl_idx}"))
-                    slot_key = str(slot_data.get("slot_key", f"Slot {sl_idx}"))
+                    slot_key = str(slot_data.get("slot_key") or slot_data.get("key") or f"Slot {sl_idx}")
                     slot_id = IdFactory.create_slot_id(slot_num)
 
                     slots.append(

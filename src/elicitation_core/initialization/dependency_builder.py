@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from typing import Optional
 from ..llm.client import LLMClient
@@ -44,8 +45,15 @@ class DependencyBuilder:
         if not topics_data:
             return PriorityResult(edges=[], order=[], ranked_items=[])
 
+        from ..llm.template import render_prompt
+
         template = self._load_prompt_template()
-        prompt = template.replace("{topics}", str(topics_data))
+        prompt = render_prompt(
+            template,
+            {
+                "{topics}": json.dumps(topics_data, ensure_ascii=False, indent=2),
+            }
+        )
 
         raw_edges = await self.llm_client.complete_json(
             prompt=prompt,

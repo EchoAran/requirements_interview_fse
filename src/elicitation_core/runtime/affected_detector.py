@@ -31,16 +31,24 @@ class AffectedTopicDetector:
             for t in all_topics
         ]
 
+        from ..llm.template import render_prompt
+
         template = self._load_template()
-        prompt = (
-            template
-            .replace("{current_topic_content}", str(current_topic.topic_content))
-            .replace("{current_topic_conversation_record}", json.dumps(conversation_record, ensure_ascii=False))
-            .replace("{topics_list}", json.dumps(topics_list, ensure_ascii=False))
+        prompt = render_prompt(
+            template,
+            {
+                "{current_topic_content}": str(current_topic.topic_content),
+                "{current_topic_conversation_record}": json.dumps(conversation_record, ensure_ascii=False),
+                "{topics_list}": json.dumps(topics_list, ensure_ascii=False),
+            }
         )
 
         try:
-            raw_result = await self.llm_client.complete_json(prompt=prompt)
+            raw_result = await self.llm_client.complete_json(
+                prompt=prompt,
+                module="AffectedTopicDetector",
+                prompt_name="affected_topic_detection",
+            )
             affected: list[str] = []
             if isinstance(raw_result, list):
                 for item in raw_result:

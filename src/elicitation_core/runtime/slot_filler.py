@@ -57,14 +57,18 @@ class SlotFiller:
             for s in target_topic.slots
         ]
 
+        from ..llm.template import render_prompt
+
         entire_info = self._build_entire_interview_info_slots(state)
         template = self._load_template()
-        prompt = (
-            template
-            .replace("{current_topic_content}", str(target_topic.topic_content))
-            .replace("{current_topic_conversation_record}", json.dumps(conversation_record, ensure_ascii=False))
-            .replace("{current_topic_info_slots}", json.dumps(current_slots_data, ensure_ascii=False))
-            .replace("{entire_interview_info_slots}", json.dumps(entire_info, ensure_ascii=False))
+        prompt = render_prompt(
+            template,
+            {
+                "{current_topic_content}": str(target_topic.topic_content),
+                "{current_topic_conversation_record}": json.dumps(conversation_record, ensure_ascii=False),
+                "{current_topic_info_slots}": json.dumps(current_slots_data, ensure_ascii=False),
+                "{entire_interview_info_slots}": json.dumps(entire_info, ensure_ascii=False),
+            }
         )
 
         raw_result = await self.llm_client.complete_json(
@@ -83,10 +87,7 @@ class SlotFiller:
             s_num = str(item.get("slot_number", "")).strip()
             s_key = str(item.get("slot_key", "")).strip() or None
             s_val_raw = item.get("slot_value")
-            proposed_op = item.get("operation")
-
-            if not s_num:
-                continue
+            proposed_op = str(item.get("operation", "")).strip().lower() or None
 
             if s_val_raw in (None, "None", ""):
                 val = None
@@ -94,10 +95,21 @@ class SlotFiller:
                 val = json.dumps(s_val_raw, ensure_ascii=False)
             else:
                 val = str(s_val_raw).strip()
-                if val.lower() == "none":
+                if val.lower() == "none" or val == "":
                     val = None
 
-            existing_slot = target_topic.find_slot(s_num)
+            # Skip None or empty value to strictly prevent clearing existing data
+            if val is None:
+                continue
+
+            existing_slot = target_topic.find_slot(s_num) if s_num else None
+            if not existing_slot and s_key:
+                for s in target_topic.slots:
+                    if s.key == s_key:
+                        existing_slot = s
+                        s_num = s.slot_number
+                        break
+
             if existing_slot:
                 event, _ = EventFactory.create_slot_value_changed_event(
                     slot=existing_slot,
@@ -109,6 +121,10 @@ class SlotFiller:
                 )
                 events.append(event)
             else:
+                if not s_num:
+                    created_count = len([e for e in events if e.event_type == "slot_created"])
+                    s_num = f"slot-{target_topic.topic_number.replace('topic-', '')}-{len(target_topic.slots) + created_count + 1}"
+
                 # Prevent cross-topic slot leakage by filtering out slot numbers that belong to other existing topics
                 belongs_to_other_topic = False
                 for other_t in state.get_all_topics():
@@ -141,15 +157,14 @@ class SlotFiller:
                 )
                 events.append(created_event)
 
-                if val is not None and val.strip() != "":
-                    val_event, _ = EventFactory.create_slot_value_changed_event(
-                        slot=new_slot,
-                        new_value=val,
-                        turn_id=user_turn_id,
-                        evidence_refs=evidence_ref_ids,
-                        proposed_operation=proposed_op or "add",
-                        is_llm_proposed=True,
-                    )
-                    events.append(val_event)
+                val_event, _ = EventFactory.create_slot_value_changed_event(
+                    slot=new_slot,
+                    new_value=val,
+                    turn_id=user_turn_id,
+                    evidence_refs=evidence_ref_ids,
+                    proposed_operation=proposed_op or "add",
+                    is_llm_proposed=True,
+                )
+                events.append(val_event)
 
         return events

@@ -2,6 +2,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Optional
 from ..config import ContextBudgetConfig
+from ..llm.template import render_prompt
 from ..models.strategy import (
     ConflictClaim,
     EvidenceSnippet,
@@ -275,18 +276,20 @@ class ContextBudgetManager:
             s_catalog = json.dumps(topics_list, ensure_ascii=False)
             s_strategy = strategy_instruction
 
-            rendered_prompt = (
-                prompt_template
-                .replace("{current_user_answer}", s_current_user_answer)
-                .replace("{current_topic_content}", topic_title)
-                .replace("{target}", tgt_text)
-                .replace("{target_evidence}", ev_text)
-                .replace("{current_topic_info_slots}", s_slots)
-                .replace("{topics_list}", s_catalog)
-                .replace("{entire_interview_info_slots}", s_known_info)
-                .replace("{transition}", transition_text)
-                .replace("{current_topic_conversation_record}", s_turns)
-                .replace("{strategy}", s_strategy)
+            rendered_prompt = render_prompt(
+                prompt_template,
+                {
+                    "{current_user_answer}": s_current_user_answer,
+                    "{current_topic_content}": topic_title,
+                    "{target}": tgt_text,
+                    "{target_evidence}": ev_text,
+                    "{current_topic_info_slots}": s_slots,
+                    "{topics_list}": s_catalog,
+                    "{entire_interview_info_slots}": s_known_info,
+                    "{transition}": transition_text,
+                    "{current_topic_conversation_record}": s_turns,
+                    "{strategy}": s_strategy,
+                }
             )
 
             blocks_tokens = {

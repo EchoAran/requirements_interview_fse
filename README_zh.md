@@ -141,8 +141,6 @@ semi_structured_interview_fse/
 │           ├── intent_controller.py    # 用户交互意图识别与置信度门禁
 │           ├── scheduler.py            # 七因子效用评分动态调度器
 │           ├── strategy_selector.py    # 六维提问策略规划器
-│           ├── topic_operator.py       # 主题操作执行器
-│           ├── operation_selector.py   # 主题转移操作评估器
 │           └── question_generator.py   # 结构化 Prompt 组装与问句生成
 ├── scripts/                            # 核心 CLI 交互工具
 │   ├── init_project.py                 # 初始化访谈项目

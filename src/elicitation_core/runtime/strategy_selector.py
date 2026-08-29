@@ -13,7 +13,7 @@ STRATEGY_INSTRUCTIONS: dict[str, str] = {
     ),
     "fill_gap": (
         "阶段：填补缺口阶段；\n"
-        "核心目标：聚焦1至2个最关键的未填充必需信息点，引导用户补充缺失事实；\n"
+        "核心目标：聚焦当前最关键的目标空缺信息点，引导用户补充缺失事实；\n"
         "提问要点：明确指向目标空缺槽位，提问简洁具体，通俗易懂，避免一次性抛出清单式问题。"
     ),
     "deepen": (
@@ -36,10 +36,6 @@ STRATEGY_INSTRUCTIONS: dict[str, str] = {
         "核心目标：向受访者确认是否希望切换/拒绝/结束当前主题，不混入新的业务需求问题；\n"
         "提问要点：提出明确的二选一或确认提问，语气礼貌客气，避免直接擅自决定。"
     ),
-    "S1": "阶段：初始探索阶段；\n核心目标：引导用户自主概述主题核心，自然覆盖 1-2 个关键必须槽位，避免限制表达；\n提问要点：用开放式表述，不包含具体槽位术语；避免引导性暗示，保持自然、开放的对话风格。",
-    "S2": "阶段：填空追问阶段；\n核心目标：引导用户填充未完成的必须槽位，自然覆盖 1-2 个槽位，避免一次性填充多个槽位，提问简洁明确；\n提问要点：仅针对优先级较高且未填充的必须槽位提问；明确指向未填充槽位，使用易懂通俗语言。",
-    "S3": "阶段：深度挖掘阶段；\n核心目标：基于已填充槽位，挖掘隐性需求、澄清模糊边界，补充缺失信息，推动从表层到深层理解；\n提问要点：紧扣已填充信息提问，聚焦隐性动机与场景细节，引导用户挖掘隐含需求与异常场景边界。",
-    "S4": "阶段：闭环确认阶段；\n核心目标：简单总结已填充信息，向确认用户需求是否完整、准确，确保逻辑自洽且符合用户期望；\n提问要点：完整汇总信息槽位，向用户确认完整性并询问是否需要修正补充，没有补充则过渡到下一话题。",
 }
 
 QUESTION_STRATEGY_INSTRUCTIONS = STRATEGY_INSTRUCTIONS
@@ -146,5 +142,6 @@ class StrategySelector:
         else:
             code = "S4"
 
-        inst = STRATEGY_INSTRUCTIONS.get(code, STRATEGY_INSTRUCTIONS["S2"])
+        legacy_map = {"S1": "explore", "S2": "fill_gap", "S3": "deepen", "S4": "verify"}
+        inst = STRATEGY_INSTRUCTIONS.get(code, STRATEGY_INSTRUCTIONS.get(legacy_map.get(code, "fill_gap"), ""))
         return code, inst, c

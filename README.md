@@ -141,8 +141,6 @@ semi_structured_interview_fse/
 │           ├── intent_controller.py    # Intent detection & confidence gating
 │           ├── scheduler.py            # 7-Factor dynamic utility scheduler
 │           ├── strategy_selector.py    # 6-Dimension question strategy selector
-│           ├── topic_operator.py       # Topic lifecycle operator
-│           ├── operation_selector.py   # Topic transition evaluator
 │           └── question_generator.py   # 13-Block isolated prompt builder & generation
 ├── scripts/                            # Operational CLI tools
 │   ├── init_project.py                 # Initialize a new interview project

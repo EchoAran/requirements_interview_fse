@@ -99,8 +99,9 @@ class EventFactory:
         )
 
         effective_new_val = new_value
-        if is_llm_proposed and proposed_operation == "clear":
-            effective_new_val = slot.value
+        if is_llm_proposed and (effective_new_val is None or str(effective_new_val).strip() == "" or proposed_operation == "clear"):
+            if slot.value is not None and str(slot.value).strip() != "":
+                effective_new_val = slot.value
 
         if effective_new_val is None or effective_new_val.strip() == "":
             new_state = "empty"

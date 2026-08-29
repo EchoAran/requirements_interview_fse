@@ -16,7 +16,6 @@ async def main():
     parser = argparse.ArgumentParser(description="Initialize a new semi-structured interview project.")
     parser.add_argument("--input", "-i", required=True, help="Path to input JSON file containing project_name and initial_requirements.")
     parser.add_argument("--config", "-c", default="configs/default.yaml", help="Path to configuration YAML file.")
-    parser.add_argument("--seed-context", default="", help="Optional domain context or experience text.")
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -51,7 +50,7 @@ async def main():
         config=config,
     )
 
-    result = await pipeline.initialize(seed_context=args.seed_context)
+    result = await pipeline.initialize()
 
     print("\n--- Project Initialized Successfully ---")
     print(f"Project ID    : {result.project_id}")

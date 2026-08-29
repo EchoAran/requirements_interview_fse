@@ -65,14 +65,18 @@ class IntentController:
             for t in topic_catalog
         ]
 
+        from ..llm.template import render_prompt
+
         template = self._load_template()
-        prompt = (
-            template
-            .replace("{current_topic_content}", str(current_topic.topic_content))
-            .replace("{current_topic_id}", str(current_topic.topic_id))
-            .replace("{interviewer_message}", str(latest_turn.interviewer_message))
-            .replace("{interviewee_message}", str(latest_turn.interviewee_message))
-            .replace("{topic_catalog_json}", json.dumps(catalog_dicts, ensure_ascii=False, indent=2))
+        prompt = render_prompt(
+            template,
+            {
+                "{current_topic_content}": str(current_topic.topic_content),
+                "{current_topic_id}": str(current_topic.topic_id),
+                "{interviewer_message}": str(latest_turn.interviewer_message),
+                "{interviewee_message}": str(latest_turn.interviewee_message),
+                "{topic_catalog_json}": json.dumps(catalog_dicts, ensure_ascii=False, indent=2),
+            }
         )
 
         effective_turn_id = turn_id or getattr(latest_turn, "user_turn_id", None)

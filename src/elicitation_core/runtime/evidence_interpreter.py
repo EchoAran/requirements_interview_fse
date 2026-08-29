@@ -59,19 +59,23 @@ class EvidenceInterpreter:
             for t in interpretation_input.topic_catalog
         ]
 
-        prompt = (
-            template
-            .replace("{current_topic_id}", str(interpretation_input.current_topic_id))
-            .replace("{current_topic_content}", str(interpretation_input.current_topic_id))
-            .replace("{current_topic_conversation_record}", json.dumps([{
-                "interviewer": interpretation_input.latest_turn.interviewer_message,
-                "interviewee": interpretation_input.latest_turn.interviewee_message,
-            }], ensure_ascii=False))
-            .replace("{topics_list}", json.dumps(topics_list_simple, ensure_ascii=False))
-            .replace("{interviewer_message}", str(interpretation_input.latest_turn.interviewer_message))
-            .replace("{interviewee_message}", str(interpretation_input.latest_turn.interviewee_message))
-            .replace("{user_turn_id}", str(interpretation_input.latest_turn.user_turn_id))
-            .replace("{topic_catalog_json}", json.dumps(catalog_dicts, ensure_ascii=False, indent=2))
+        from ..llm.template import render_prompt
+
+        prompt = render_prompt(
+            template,
+            {
+                "{current_topic_id}": str(interpretation_input.current_topic_id),
+                "{current_topic_content}": str(interpretation_input.current_topic_id),
+                "{current_topic_conversation_record}": json.dumps([{
+                    "interviewer": interpretation_input.latest_turn.interviewer_message,
+                    "interviewee": interpretation_input.latest_turn.interviewee_message,
+                }], ensure_ascii=False),
+                "{topics_list}": json.dumps(topics_list_simple, ensure_ascii=False),
+                "{interviewer_message}": str(interpretation_input.latest_turn.interviewer_message),
+                "{interviewee_message}": str(interpretation_input.latest_turn.interviewee_message),
+                "{user_turn_id}": str(interpretation_input.latest_turn.user_turn_id),
+                "{topic_catalog_json}": json.dumps(catalog_dicts, ensure_ascii=False, indent=2),
+            }
         )
 
         turn_id = getattr(interpretation_input.latest_turn, "user_turn_id", None)

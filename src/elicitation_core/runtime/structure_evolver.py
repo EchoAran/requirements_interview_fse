@@ -24,14 +24,10 @@ class StructureEvolver:
         self.prompts_dir = Path(prompts_dir)
 
     def _load_template(self) -> str:
-        for name in [
-            "emergent_topic_resolution.txt",
-            "topic_generation.txt",
-        ]:
-            p = self.prompts_dir / name
-            if p.exists():
-                with open(p, "r", encoding="utf-8") as f:
-                    return f.read()
+        p = self.prompts_dir / "emergent_topic_resolution.txt"
+        if p.exists():
+            with open(p, "r", encoding="utf-8") as f:
+                return f.read()
 
         return "Candidate: {candidate_title}\nDescription: {candidate_description}\nExisting: {existing_topics_json}"
 
@@ -83,13 +79,17 @@ class StructureEvolver:
             for t in all_topics
         ]
 
+        from ..llm.template import render_prompt
+
         template = self._load_template()
-        prompt = (
-            template
-            .replace("{candidate_title}", str(candidate.title))
-            .replace("{candidate_description}", str(candidate.description))
-            .replace("{candidate_slots}", json.dumps(candidate.suggested_slots, ensure_ascii=False))
-            .replace("{existing_topics_json}", json.dumps(existing_list, ensure_ascii=False, indent=2))
+        prompt = render_prompt(
+            template,
+            {
+                "{candidate_title}": str(candidate.title),
+                "{candidate_description}": str(candidate.description),
+                "{candidate_slots}": json.dumps(candidate.suggested_slots, ensure_ascii=False),
+                "{existing_topics_json}": json.dumps(existing_list, ensure_ascii=False, indent=2),
+            }
         )
 
         try:

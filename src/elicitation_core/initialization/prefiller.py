@@ -57,12 +57,16 @@ class ProjectPrefiller:
             slots_by_topic[topic_key] = {"slots": slots_data}
             slots_map[t.topic_number] = {s.slot_number: s for s in t.slots}
 
+        from ..llm.template import render_prompt
+
         template = self._load_prompt_template()
-        prompt = (
-            template
-            .replace("{initial_requirements}", req)
-            .replace("{topics_list}", json.dumps(topics_list, ensure_ascii=False))
-            .replace("{slots_by_topic}", json.dumps(slots_by_topic, ensure_ascii=False))
+        prompt = render_prompt(
+            template,
+            {
+                "{initial_requirements}": req,
+                "{topics_list}": json.dumps(topics_list, ensure_ascii=False),
+                "{slots_by_topic}": json.dumps(slots_by_topic, ensure_ascii=False),
+            }
         )
 
         raw_updates = await self.llm_client.complete_json(
