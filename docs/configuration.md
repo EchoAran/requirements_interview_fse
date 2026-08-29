@@ -26,9 +26,11 @@ The system uses strong typing via Pydantic V2 (`AppConfig.load_from_yaml()`). Co
 2. **Default File Path**: Falls back to `configs/default.yaml` if present;
 3. **Built-in Safe Defaults**: If no file is found, the system instantiates default configuration instances safely in-memory.
 
+The same rule applies when resuming an interrupted project. The configuration supplied to the current invocation is authoritative; initialization-time configuration is not restored from the run directory. Changing token budgets, model settings, timeouts, or retry counts affects only the pending and future work. Previously committed interview Turns, Evidence, StateEvents, and Decisions remain valid.
+
 ### 1.3 Security & Credential Protection
 - **Environment-based Key Resolution**: We strongly advise configuring `api_key_env` (defaults to `"LLM_API_KEY"`) rather than hardcoding API secrets in plaintext.
-- **Audit Log Sanitization**: During session initialization and execution, `config_snapshot.yaml` and `llm_calls.jsonl` automatically mask and redact any plaintext `api_key` values.
+- **Audit Log Sanitization**: `llm_calls.jsonl` must not contain plaintext `api_key` values. Runtime configuration is not persisted as a project-level snapshot.
 
 ---
 
@@ -130,7 +132,7 @@ Restricts token budgets across distinct semantic prompt blocks, ensuring robust 
 
 | Field Name | Type | Default | Valid Range | Description & Recommendations |
 |---|---|---|---|---|
-| `max_prompt_tokens` | `int` | `3500` | `100` ~ `100000` | Global maximum token cap for the question generation prompt. If budget is exceeded after progressive trimming, deterministic rule fallback is triggered safely. |
+| `max_prompt_tokens` | `int` | `3500` | `100` ~ `100000` | Global maximum token cap for the question generation prompt. If essential context still exceeds the budget after progressive trimming, question generation fails without committing the turn; increase the current budget and resume the pending input. |
 | `max_recent_turn_tokens` | `int` | `800` | `50` ~ `50000` | Maximum token budget for the recent dialogue history block. |
 | `max_target_evidence_tokens`| `int` | `800` | `50` ~ `50000` | Maximum token budget for the target evidence chain traceability block. |
 | `max_known_info_tokens` | `int` | `600` | `50` ~ `50000` | Maximum token budget for cross-topic known facts block. |
@@ -145,6 +147,8 @@ When token counts exceed the configured limits, `ContextBudgetManager` trims con
 2. **P6 Trim**: Cross-topic known facts drop the oldest entries in chronological order;
 3. **P5 Trim**: Conversation history trims the oldest turn pairs (guaranteeing at least 1 recent turn pair remains);
 4. **P4 Trim**: Active topic slot definitions drop optional (non-mandatory) slots.
+
+If the essential target, evidence, and required current-state blocks still exceed the configured limits, the system must raise `question_context_budget_exceeded`. It must not generate a fallback question or commit Evidence, StateEvents, Decisions, an Interviewer Turn, or a new state snapshot for that attempt. After changing the active configuration, resume the project to retry the original pending Interviewee Turn.
 
 ---
 
