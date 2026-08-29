@@ -1,0 +1,52 @@
+# Default Configuration for Elicitation Core
+# For full descriptions and tuning guide, see configs/default.example.yaml and docs/configuration.md
+
+model:
+  provider: "openai_compatible"
+  api_url: "https://api.openai.com/v1/chat/completions"
+  api_key_env: "LLM_API_KEY"
+  api_key: ""
+  model_name: "gpt-4o"
+  temperature: 0.2
+  timeout_seconds: 60.0
+  max_retries: 3
+
+intent:
+  confidence_threshold: 0.60
+  confirmation_threshold: 0.40
+
+scheduler:
+  weights:
+    initial_prior: 0.15
+    dependency_readiness: 0.20
+    unresolved_gap: 0.20
+    conflict_signal: 0.15
+    recent_emergence: 0.10
+    continuity: 0.15
+    user_relevance: 0.05
+
+strategy:
+  max_target_slots: 1
+  short_value_char_threshold: 12
+  emergence_deepen_turn_window: 2
+
+context_budget:
+  max_prompt_tokens: 3500
+  max_recent_turn_tokens: 800
+  max_target_evidence_tokens: 800
+  max_known_info_tokens: 600
+  max_current_slots_tokens: 600
+  max_catalog_tokens: 400
+  history_window_size: 6
+  max_current_topic_slots: 15
+
+runtime:
+  max_turns: 50
+  atomic_state_write: true
+  log_raw_llm_response: true
+  save_prompt_text: true
+  runs_dir: "runs"
+  prompts_dir: "prompts"
+  strategy_completion_threshold: 0.60
+  priority_dep_weight: 0.60
+  priority_section_weight: 0.40

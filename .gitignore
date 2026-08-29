@@ -1,0 +1,44 @@
+# Existing project ignores
+tests/
+.venv/
+venv/
+.pytest_cache/
+scripts/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+ENV/
+env/
+.python-version
+.mypy_cache/
+.ruff_cache/
+coverage.xml
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+site/
+
+# Logs / local data
+*.log
+*.sqlite3
+
+# Documentation: keep only the configuration file tracked and ignore everything else under docs/
+docs/**
+!docs/
+!docs/configuration.md
