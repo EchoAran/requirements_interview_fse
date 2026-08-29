@@ -1,157 +1,158 @@
 # ==============================================================================
-# Elicitation Core (需求半结构化访谈核心机制引擎) 配置文件示例
+# Elicitation Core - Configuration Example
 # 
-# 复制此文件为 default.yaml 即可开始配置与运行：
+# Copy this file to default.yaml to get started:
 #   cp configs/default.example.yaml configs/default.yaml
 #
-# 详细字段说明与调优指南请参阅：docs/configuration.md
+# For detailed field definitions and tuning guide, see: docs/configuration.md
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
-# 1. 大语言模型服务配置 (Model Configuration)
+# 1. Large Language Model Service Configuration (Model)
 # ------------------------------------------------------------------------------
 model:
-  # 模型服务提供方类型，推荐使用 openai_compatible 协议
+  # LLM provider type (openai_compatible recommended)
   provider: "openai_compatible"
 
-  # 大模型 API 端点完整 URL (需兼容 OpenAI Chat Completions 接口格式)
-  # 示例:
-  #   - OpenAI 官方: "https://api.openai.com/v1/chat/completions"
-  #   - DeepSeek 官方: "https://api.deepseek.com/v1/chat/completions"
-  #   - 通义千问: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-  #   - Ollama 本地部署: "http://localhost:11434/v1/chat/completions"
+  # Full URL of the Chat Completions endpoint (compatible with OpenAI API format)
+  # Examples:
+  #   - OpenAI: "https://api.openai.com/v1/chat/completions"
+  #   - DeepSeek: "https://api.deepseek.com/v1/chat/completions"
+  #   - Alibaba DashScope: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+  #   - Local Ollama: "http://localhost:11434/v1/chat/completions"
   api_url: "https://api.openai.com/v1/chat/completions"
 
-  # 从指定名称的环境变量中自动读取 API Key (推荐做法，避免明文泄露)
+  # Environment variable name to retrieve the API key (recommended over hardcoding)
   api_key_env: "LLM_API_KEY"
 
-  # 直接指定 API Key (若留空，系统将自动优先读取 api_key_env 或 OPENAI_API_KEY 环境变量)
+  # Explicit API key (if empty, the system automatically checks api_key_env or OPENAI_API_KEY)
   api_key: ""
 
-  # 调用的模型名称标识 (例如: gpt-4o, gpt-4o-mini, deepseek-chat, qwen-plus 等)
+  # Target model identifier (e.g., gpt-4o, gpt-4o-mini, deepseek-chat, qwen-plus)
   model_name: "gpt-4o"
 
-  # 采样温度 (0.0 ~ 1.0)。较低的温度有助于生成格式严谨的 JSON 并保证结构化推理稳定性
+  # Sampling temperature (0.0 ~ 1.0). Lower temperature ensures deterministic JSON formatting and reasoning
   temperature: 0.2
 
-  # 单次网络请求超时上限 (单位: 秒)
+  # HTTP request timeout in seconds
   timeout_seconds: 60.0
 
-  # 遭遇网络超时、断连或服务端限流时的最大自动重试次数
+  # Maximum automatic retries upon network timeouts, disconnects, or rate limiting
   max_retries: 3
 
 
 # ------------------------------------------------------------------------------
-# 2. 用户交互控制意图配置 (Intent Controller Configuration)
+# 2. User Intent Control Configuration (Intent)
 # ------------------------------------------------------------------------------
 intent:
-  # 用户控制意图识别的直接生效置信度阈值 (0.0 ~ 1.0)
-  # 高于此值时，系统直接执行话题跳转 (switch_existing_topic)、拒绝 (refuse_topic) 或结项 (stop_interview)
+  # Direct execution confidence threshold for user control intentions (0.0 ~ 1.0).
+  # When confidence >= threshold, the system immediately applies topic switching, refusal, or termination.
   confidence_threshold: 0.60
 
-  # 用户控制意图的二次确认置信度门限 (0.0 ~ 1.0)
-  # 介于 confirmation_threshold 与 confidence_threshold 之间时，触发 confirm_control 策略向用户主动求证
+  # Confirmation threshold for ambiguous user control intentions (0.0 ~ 1.0).
+  # When confidence falls between confirmation_threshold and confidence_threshold, the system triggers
+  # the 'confirm_control' strategy to seek user clarification before taking action.
   confirmation_threshold: 0.40
 
 
 # ------------------------------------------------------------------------------
-# 3. 七因子动态调度器权重配置 (Scheduler Weights Configuration)
-# 说明：系统会自动对以下 7 项权重进行归一化校验与计算
+# 3. Seven-Factor Dynamic Scheduler Weights Configuration (Scheduler)
+# Note: The system automatically normalizes these weights (sum to 1.0) during loading.
 # ------------------------------------------------------------------------------
 scheduler:
   weights:
-    # 初始先验权重 (基于大纲定义的初始重要度与先后顺序)
+    # Prior weight derived from the initial scaffold and domain outline
     initial_prior: 0.15
 
-    # 依赖就绪度权重 (前序依赖话题是否均已完成，就绪度高者优先)
+    # Dependency readiness weight (higher score if all predecessor topics are completed)
     dependency_readiness: 0.20
 
-    # 信息缺口率权重 (必填槽位为空白的比例，缺口越大权重越高)
+    # Information gap weight (ratio of required slots that remain unfilled)
     unresolved_gap: 0.20
 
-    # 冲突信号权重 (主题内存在未化解的矛盾或冲突槽位时，优先调度进行澄清)
+    # Conflict signal weight (prioritizes topics with contradictions to resolve issues early)
     conflict_signal: 0.15
 
-    # 最新涌现权重 (最新对话中动态涌现出的新需求方向，赋予探索倾向)
+    # Recent emergence weight (boosts newly discovered emergent topic directions)
     recent_emergence: 0.10
 
-    # 对话连续性权重 (倾向于在当前主题未完成前保持连续深入，避免跳跃感)
+    # Conversational continuity weight (favors staying on the active topic until finished)
     continuity: 0.15
 
-    # 用户发言相关度权重 (受访者最新回答中主动提及该主题时的相关度得分)
+    # User relevance weight (relevance score when the interviewee mentions this topic)
     user_relevance: 0.05
 
 
 # ------------------------------------------------------------------------------
-# 4. 提问策略规划配置 (Strategy Configuration)
+# 4. Question Strategy Planning Configuration (Strategy)
 # ------------------------------------------------------------------------------
 strategy:
-  # 单轮提问聚焦填补的最大目标槽位数量 (建议设为 1，避免多槽位引发受访者认知过载)
+  # Maximum target slots to focus on within a single turn (1 recommended to prevent cognitive overload)
   max_target_slots: 1
 
-  # 槽位内容过短字数判定门限 (字符数低于此值时判定回答不够详尽，倾向触发 deepen 策略深挖)
+  # Short value character threshold (values below this length are considered shallow, prompting 'deepen')
   short_value_char_threshold: 12
 
-  # 动态涌现话题创建后的连续深挖保护轮次窗口
+  # Protection turn window for newly emergent topics to allow consecutive deep exploration
   emergence_deepen_turn_window: 2
 
 
 # ------------------------------------------------------------------------------
-# 5. 上下文预算与 Token 裁剪配置 (Context Budget & Token Management)
+# 5. Context Budget & Token Management Configuration (Context Budget)
 # ------------------------------------------------------------------------------
 context_budget:
-  # 提问生成 Prompt 全局最大 Token 上限 (超出且裁剪后仍超限将触发确定性规则降级回退)
+  # Maximum overall token limit for question generation prompt (exceeding triggers rule fallback)
   max_prompt_tokens: 3500
 
-  # 对话历史窗口区块的最大 Token 预算
+  # Maximum token budget for the recent conversation history block
   max_recent_turn_tokens: 800
 
-  # 关联证据溯源区块的最大 Token 预算
+  # Maximum token budget for the target evidence chain traceability block
   max_target_evidence_tokens: 800
 
-  # 跨主题已知事实区块的最大 Token 预算
+  # Maximum token budget for the cross-topic known information block
   max_known_info_tokens: 600
 
-  # 当前主题槽位清单区块的最大 Token 预算
+  # Maximum token budget for the active topic slots block
   max_current_slots_tokens: 600
 
-  # 全局主题大纲目录区块的最大 Token 预算
+  # Maximum token budget for the global topic catalog block
   max_catalog_tokens: 400
 
-  # 对话历史保留的最大轮次对数量 (1 轮对 = 1 问 + 1 答)
+  # Maximum number of conversation turn pairs (1 pair = 1 question + 1 answer) to retain in sliding window
   history_window_size: 6
 
-  # 当前主题装配至 Prompt 中的最大槽位数量
+  # Maximum number of slot definitions to include in the active topic prompt payload
   max_current_topic_slots: 15
 
 
 # ------------------------------------------------------------------------------
-# 6. 运行时系统行为配置 (Runtime System Configuration)
+# 6. Runtime System Configuration (Runtime)
 # ------------------------------------------------------------------------------
 runtime:
-  # 单次访谈生命周期的最大安全轮次上限 (防止异常逻辑导致死循环)
+  # Maximum safety turn limit for an interview session to prevent infinite conversational loops
   max_turns: 50
 
-  # 是否使用原子重命名写入 state.json (保障意外断电/宕机时状态文件不损坏)
+  # Whether to use atomic file replacement when saving state.json (prevents corruption on sudden crash)
   atomic_state_write: true
 
-  # 是否在 llm_calls.jsonl 中记录完整的原始大模型响应文本
+  # Whether to record raw unparsed LLM text responses into llm_calls.jsonl for auditing
   log_raw_llm_response: true
 
-  # 是否在 llm_calls.jsonl 中记录渲染后的完整 Prompt 文本
+  # Whether to record rendered prompt texts into llm_calls.jsonl for reproducibility
   save_prompt_text: true
 
-  # 访谈项目持久化数据存储根目录 (相对路径或绝对路径)
+  # Base directory path for session storage artifacts (relative or absolute)
   runs_dir: "runs"
 
-  # 提示词模板文件根目录
+  # Base directory path for prompt template text files
   prompts_dir: "prompts"
 
-  # 主题必须槽位完成度达标阈值 (高于此值且无空缺时触发 verify 闭环确认)
+  # Completion threshold for required slots to trigger the 'verify' convergence strategy
   strategy_completion_threshold: 0.60
 
-  # 静态拓扑排序中依赖深度与连通度的排序权重
+  # Topological sort weight for dependency graph depth and connectivity
   priority_dep_weight: 0.60
 
-  # 静态拓扑排序中章节自然结构顺序的排序权重
+  # Topological sort weight for natural section sequence
   priority_section_weight: 0.40

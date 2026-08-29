@@ -43,4 +43,3 @@ configs/**
 
 tests/
 .pytest_cache/
-scripts/
