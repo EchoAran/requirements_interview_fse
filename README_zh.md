@@ -22,7 +22,7 @@
   - [6.1 事件溯源与两阶段事务归约](#61-事件溯源与两阶段事务归约)
   - [6.2 七因子动态调度器](#62-七因子动态调度器)
   - [6.3 六维提问策略与 Prompt 隔离](#63-六维提问策略与-prompt-隔离)
-  - [6.4 上下文预算管理与确定性降级](#64-上下文预算管理与确定性降级)
+  - [6.4 上下文预算管理与明确失败暴露](#64-上下文预算管理与明确失败暴露)
   - [6.5 不变量门禁与中断幂等恢复](#65-不变量门禁与中断幂等恢复)
 - [开源协议](#开源协议)
 
@@ -36,7 +36,7 @@
 - 🔗 **全流程结构化证据链（Evidence Traceability）**：受访者的每次有效陈述均转换为不可变的证据引用（`EvidenceRef`），槽位版本（`SlotRevision`）严格关联支撑证据，确保导出的每条需求事实均有据可查。
 - 🧭 **意图控制与多因素动态调度（Intent & 7-Factor Scheduling）**：支持受访者主动拒绝、切换话题或提前结项；结合初始先验、依赖就绪度、缺口率、冲突信号、话题涌现度、上下文连续性与用户关联度进行全局最优化主题调度。
 - 💡 **六维提问策略规划（Strategy-guided Elicitation）**：解耦“聊什么”（调度目标）与“怎么问”（提问策略），针对探索、填空、深挖、化解冲突、闭环确认与意图核验等六大情境实施针对性提问规划。
-- 🛡️ **严格上下文预算与确定性降级（Budgeting & Graceful Fallback）**：13 隔离区块结构化 Prompt 契约，结合 P7~P4 优先级梯度载荷裁剪。在模型网络故障、输出畸变或预算超限时，自动无损触发启发式规则回退，保障访谈永不崩溃。
+- 🛡️ **严格上下文预算与明确失败暴露（Budgeting & Failure Exposure）**：13 隔离区块结构化 Prompt 契约，结合 P7~P4 优先级梯度载荷裁剪。在模型调用异常、输出为空或预算超限时，立即停止推进并暴露错误，不使用 fallback 掩盖错误，不污染未完成轮次状态。
 - 🔒 **15 项全局状态不变量（State Invariant Guardrails）**：建立强类型业务门禁，杜绝孤儿槽位、跨主题数据泄漏、多活动主题等非法状态。
 
 ---
@@ -69,9 +69,8 @@ flowchart TD
         Q --> R[上下文构建 QuestionContextBuilder]
         R --> S[预算管理 ContextBudgetManager]
         S --> T[隔离提问生成 QuestionGenerator]
-        T -->|异常/超限| U[结构化规则模板兜底 Fallback]
         T -->|正常| V[大模型推理提问]
-        U & V --> W[全局不变量门禁核验 StateInvariantValidator]
+        V --> W[全局不变量门禁核验 StateInvariantValidator]
     end
 
     W -->|下一轮| G
@@ -159,7 +158,6 @@ semi_structured_interview_fse/
 
 | 文件名 | 类型 | 核心作用与规范 |
 |---|---|---|
-| `config_snapshot.yaml` | YAML | 初始化时冻结的配置快照，确保后续会话恢复与审计使用完全一致的运行时参数 |
 | `input.json` | JSON | 原始项目创建参数（项目名称、初始输入文本、创建时间等） |
 | `state.initial.json` | JSON | Round 0 初始化阶段完成后的基线状态快照 |
 | `state.json` | JSON | 当前最新的项目运行时状态快照（可随时删除并由事件流 100% 确定性重建） |
@@ -248,7 +246,7 @@ python scripts/inspect_state.py --project-id <PROJECT_ID>
 *打印当前项目的整体进度、各章节下各主题的状态（Ongoing / Pending / Completed）、槽位填充详情以及已建立的主题依赖拓扑。*
 
 #### 4. 恢复异常中断的项目 (`resume.py`)
-如果因为网络中断、机器重启或人工暂停导致会话中止，直接使用 `resume.py` 进行幂等恢复与状态自愈：
+如果因为网络中断、预算超限或人工暂停导致会话中止，直接使用 `resume.py` 进行幂等恢复与状态自愈：
 ```bash
 python scripts/resume.py --project-id <PROJECT_ID>
 ```
@@ -297,14 +295,14 @@ $$\text{Score}(T) = w_1 \cdot \text{Prior} + w_2 \cdot \text{DepReadiness} + w_3
 
 Prompt 模板采用 **13 个严格语义区块隔离设计**，隔离系统指令、当前聚焦目标（TargetContext）、跨主题已知事实（Known Info）、历史对话上下文与输出约束，有效杜绝模型偏题与指令泄漏。
 
-### 6.4 上下文预算管理与确定性降级
+### 6.4 上下文预算管理与明确失败暴露
 `ContextBudgetManager` 设定全局及单区块 Token 上限。当输入内容超限时，按照既定梯度实施确定性削减：
 - **P7 削减**：主题目录（Topic Catalog）降级至仅保留当前主题；
 - **P6 削减**：裁剪最旧的跨主题已知事实；
 - **P5 削减**：对话历史窗口滑动裁剪（保证至少保留最新一轮 Q&A 对）；
 - **P4 削减**：裁剪当前主题的非必需/可选槽位。
 
-若核心关键上下文仍然超限，或遭遇 LLM 接口异常/超时，系统自动激活 **结构化规则模板（Fallback Template）** 产出保底提问，记录 `RunError` 审计日志，确保业务进程永不中断。
+若核心关键上下文仍然超限，或遭遇 LLM 接口异常/超时/空输出，系统直接抛出明确异常，记录 `RunError` 审计日志，不向磁盘提交该轮的 Evidence、StateEvent、Decision、Interviewer Turn 或 `state.json`。挂起的 Interviewee Turn 可在调整预算配置后通过 resume 安全重试并继续推进。
 
 ### 6.5 不变量门禁与中断幂等恢复
 系统通过 `StateInvariantValidator` 实时检验 15 项核心业务不变量：

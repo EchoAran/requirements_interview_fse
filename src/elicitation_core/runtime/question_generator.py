@@ -4,6 +4,7 @@ import json
 import logging
 from ..config import ContextBudgetConfig
 from ..llm.client import LLMClient
+from ..llm.exceptions import LLMConfigurationError, LLMOutputError, LLMTransportError
 from ..models.interpretation import TopicDigest
 from ..models.run_record import RunError
 from ..models.state import ProjectState, TopicState
@@ -45,60 +46,6 @@ class QuestionGenerator:
         with open(prompt_path, "r", encoding="utf-8") as f:
             return f.read()
 
-    def get_fallback_question_by_title(
-        self,
-        plan: QuestionPlan,
-        topic_title: str,
-        target_context: Optional[TargetContext] = None,
-    ) -> str:
-        """Provides natural conversational fallback question bound to target semantics without exposing internal IDs, slot keys, or scores."""
-        strat = plan.strategy
-        if strat == "explore":
-            if target_context and target_context.target_relations:
-                rel = target_context.target_relations[0]
-                desc = rel.get("description", f"【{rel.get('target')}】依赖于【{rel.get('source')}】")
-                return f"关于【{topic_title}】，注意到{desc}，能否请您说明相关的衔接规则与背景？"
-            return f"关于【{topic_title}】，您可以先结合实际使用场景说说最重要的情况吗？"
-        elif strat == "fill_gap":
-            if target_context and target_context.target_slots:
-                target_key = target_context.target_slots[0].semantic_key
-                return f"关于【{topic_title}】，能否请您具体说明一下相关的【{target_key}】？"
-            return f"关于【{topic_title}】，能否请您具体说明一下相关的核心规则与期望要求？"
-        elif strat == "deepen":
-            if target_context and target_context.target_slots:
-                target_slot = target_context.target_slots[0]
-                val_str = f"（当前记录: {target_slot.current_value}）" if target_slot.current_value else ""
-                return f"关于刚才提到的【{target_slot.semantic_key}】{val_str}，能否请您再举一个具体的场景或补充一下细节？"
-            return f"关于刚才提到的【{topic_title}】内容，能否请您再举一个具体的场景或补充一下细节？"
-        elif strat == "resolve_conflict":
-            if target_context and target_context.conflict_claims:
-                for key, claims in target_context.conflict_claims.items():
-                    if len(claims) >= 2:
-                        return f"关于【{topic_title}】中的【{key}】，前面记录了「{claims[0].value}」和「{claims[1].value}」两种不同说法，请问实际以哪种规则为准呢？"
-                    elif len(claims) == 1:
-                        return f"关于【{topic_title}】中的【{key}】，前面的描述中似乎存在不同的说法，请问实际以哪种规则为准呢？"
-            return f"关于【{topic_title}】，前面的描述里似乎存在两种不同说法，请问实际以哪种规则为准呢？"
-        elif strat == "verify":
-            if target_context and target_context.verify_facts:
-                facts_str = "、".join(f"{f['key']}为{f['value']}" for f in target_context.verify_facts[:3])
-                return f"关于【{topic_title}】，我们已梳理了{facts_str}等核心要点，请问这些内容是否准确？还有需要补充或修正的吗？"
-            return f"关于【{topic_title}】的核心要求已基本梳理，请问您看这些内容是否准确？还有需要补充或修正的吗？"
-        elif strat == "confirm_control":
-            target_title = None
-            if target_context and target_context.target_topics:
-                target_title = target_context.target_topics[0].topic_content
-            if target_title:
-                return f"请问您是希望先切换到【{target_title}】，还是继续补充当前【{topic_title}】？"
-            return "请问您是希望先调整讨论方向，还是继续补充当前话题呢？"
-        return f"请问关于【{topic_title}】，还有哪些需要说明的要点吗？"
-
-    def get_fallback_question(
-        self,
-        plan: QuestionPlan,
-        topic: TopicState,
-        target_context: Optional[TargetContext] = None,
-    ) -> str:
-        return self.get_fallback_question_by_title(plan, topic.topic_content, target_context=target_context)
 
     def _build_entire_interview_info_slots_from_known_info(
         self,
@@ -272,9 +219,8 @@ class QuestionGenerator:
         input_data: QuestionGenerationInput,
         turn_id: Optional[str] = None,
     ) -> tuple[str, str]:
-        """Main structured generation entrypoint consuming QuestionGenerationInput with context budgeting and objective fallback."""
+        """Main structured generation entrypoint consuming QuestionGenerationInput with context budgeting."""
         plan = input_data.plan
-        topic_title = input_data.topic.topic_content
 
         effective_turn_id = turn_id
         if not effective_turn_id and input_data.recent_turns:
@@ -312,10 +258,7 @@ class QuestionGenerator:
             err_msg = f"Prompt construction failed: {exc}"
             logger.error("prompt_build_error: %s", err_msg)
             _emit_error("prompt_build_error", err_msg)
-            return (
-                self.get_fallback_question_by_title(plan, topic_title, target_context=input_data.target_context),
-                plan.strategy,
-            )
+            raise RuntimeError(err_msg) from exc
 
         # 2. Context Budget Check
         if budget_res.is_exceeded:
@@ -326,10 +269,7 @@ class QuestionGenerator:
             )
             logger.error("question_context_budget_exceeded: %s", err_msg)
             _emit_error("question_context_budget_exceeded", err_msg)
-            return (
-                self.get_fallback_question_by_title(plan, topic_title, target_context=input_data.target_context),
-                plan.strategy,
-            )
+            raise RuntimeError(err_msg)
 
         metadata = {
             "budget": {
@@ -354,24 +294,38 @@ class QuestionGenerator:
                 )
             except TypeError:
                 response = await self.llm_client.complete_text(prompt=budget_res.final_prompt)
-        except Exception as exc:
-            err_msg = f"LLM transport error: {exc}"
+        except LLMOutputError as exc:
+            err_msg = str(exc)
+            logger.error("llm_output_error: %s", err_msg)
+            # If not an LLMClient instance that already emitted on_error, emit it here
+            if type(self.llm_client) is not LLMClient:
+                _emit_error("llm_output_error", err_msg)
+            raise
+        except LLMConfigurationError as exc:
+            err_msg = str(exc)
+            logger.error("llm_configuration_error: %s", err_msg)
+            if type(self.llm_client) is not LLMClient:
+                _emit_error("llm_configuration_error", err_msg)
+            raise
+        except (LLMTransportError, ConnectionError, TimeoutError, OSError) as exc:
+            err_msg = str(exc)
             logger.error("transport_error: %s", err_msg)
-            _emit_error("transport_error", err_msg)
-            return (
-                self.get_fallback_question_by_title(plan, topic_title, target_context=input_data.target_context),
-                plan.strategy,
-            )
+            if type(self.llm_client) is not LLMClient:
+                _emit_error("transport_error", err_msg)
+            raise
+        except Exception as exc:
+            err_msg = str(exc)
+            logger.error("transport_error: %s", err_msg)
+            if type(self.llm_client) is not LLMClient:
+                _emit_error("transport_error", err_msg)
+            raise
 
         # 4. Output Validation & Direct Return (No linguistic/regex filter on non-empty output)
         if not response or not response.strip():
             err_msg = "LLM returned empty or whitespace response."
-            logger.warning("empty_output: %s", err_msg)
-            _emit_error("empty_output", err_msg)
-            return (
-                self.get_fallback_question_by_title(plan, topic_title, target_context=input_data.target_context),
-                plan.strategy,
-            )
+            logger.warning("llm_output_error: %s", err_msg)
+            _emit_error("llm_output_error", err_msg)
+            raise LLMOutputError(err_msg)
 
         return response, plan.strategy
 

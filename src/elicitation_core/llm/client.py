@@ -89,7 +89,21 @@ class LLMClient:
         **kwargs: Any,
     ) -> str:
         """Call LLM and return raw response string."""
-        self._validate_config()
+        try:
+            self._validate_config()
+        except LLMConfigurationError as cfg_err:
+            if self.on_error:
+                run_err = RunError(
+                    error_id=f"err_{uuid.uuid4().hex[:8]}",
+                    turn_id=turn_id,
+                    module=module or "LLMClient",
+                    error_type="llm_configuration_error",
+                    message=str(cfg_err),
+                    recoverable=False,
+                )
+                self.on_error(run_err)
+            raise
+
         call_id = f"call_{uuid.uuid4().hex[:12]}"
         api_key = self.config.get_effective_api_key()
 
@@ -127,6 +141,8 @@ class LLMClient:
                     choices = result.get("choices", [])
                     if choices and len(choices) > 0:
                         content = choices[0]["message"]["content"].strip()
+                        if not content:
+                            raise LLMOutputError("LLM returned empty or whitespace response.")
                         latency_ms = (time.perf_counter() - start_time) * 1000.0
 
                         if record_completed and self.on_call_completed:
@@ -189,11 +205,20 @@ class LLMClient:
             self.on_call_completed(err_record)
 
         if self.on_error:
+            if isinstance(last_exception, LLMConfigurationError):
+                err_type = "llm_configuration_error"
+            elif isinstance(last_exception, LLMOutputError):
+                err_type = "llm_output_error"
+            elif isinstance(last_exception, LLMTransportError):
+                err_type = "transport_error"
+            else:
+                err_type = "transport_error"
+
             run_err = RunError(
                 error_id=f"err_{uuid.uuid4().hex[:8]}",
                 turn_id=turn_id,
                 module=module or "LLMClient",
-                error_type="llm_transport_error" if isinstance(last_exception, LLMTransportError) else "llm_output_error",
+                error_type=err_type,
                 message=str(last_exception),
                 recoverable=True,
             )

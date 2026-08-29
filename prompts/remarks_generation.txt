@@ -3,25 +3,25 @@
 
 # 输入：
 1. 受访者最新回答 As [current_user_answer]:
-{current_user_answer}
+  {current_user_answer}
 2. 当前探讨主题 As [current_topic]:
-{current_topic_content}
+  {current_topic_content}
 3. 本轮核心提问目标（最高优先级） As [question_target]:
-{target}
+  {target}
 4. 目标关联事实证据 As [target_evidence]:
-{target_evidence}
+  {target_evidence}
 5. 话题衔接与过渡建议 As [transition]:
-{transition}
+  {transition}
 6. 当前主题槽位收集状态 As [current_topic_state]:
-{current_topic_info_slots}
+  {current_topic_info_slots}
 7. 近期对话上下文 As [recent_conversation]:
-{current_topic_conversation_record}
+  {current_topic_conversation_record}
 8. 全项目其他已知事实（仅供参考背景） As [known_facts_background]:
-{entire_interview_info_slots}
+  {entire_interview_info_slots}
 9. 访谈主题边界目录（仅供参考边界） As [topic_boundary]:
-{topics_list}
+  {topics_list}
 10. 当前阶段提问策略指令 As [strategy_instruction]:
-{strategy}
+  {strategy}
 
 # 规则（最高优先级）：
 1. 目标隔离与绝对执行：必须严格落实 [question_target] 所规定的提问目标，提问目标的执行优先级高于一切背景信息；严禁被其他背景信息带偏。

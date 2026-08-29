@@ -22,7 +22,7 @@
   - [6.1 Event Sourcing & Two-Phase Reducer](#61-event-sourcing--two-phase-reducer)
   - [6.2 Seven-Factor Dynamic Scheduler](#62-seven-factor-dynamic-scheduler)
   - [6.3 Six-Dimension Strategy Planning & Isolated Prompting](#63-six-dimension-strategy-planning--isolated-prompting)
-  - [6.4 Context Budgeting & Graceful Fallback](#64-context-budgeting--graceful-fallback)
+  - [6.4 Context Budgeting & Failure Exposure](#64-context-budgeting--failure-exposure)
   - [6.5 Invariant Guardrails & Mid-Turn Recovery](#65-invariant-guardrails--mid-turn-recovery)
 - [License](#license)
 
@@ -36,7 +36,7 @@ Traditional LLM-based interview systems suffer from **factual hallucination**, *
 - 🔗 **Full-Lifecycle Evidence Traceability**: Interviewee statements are captured as immutable `EvidenceRef` records. All slot revisions (`SlotRevision`) explicitly reference supporting evidence, ensuring that every extracted requirement fact is fully auditable.
 - 🧭 **Intent Control & 7-Factor Scheduling**: Handles explicit user conversational control (topic switching, topic refusal, backtracking, early termination) with confidence thresholds; dynamically evaluates candidate topics across 7 factors (prior, readiness, gap, conflict, emergence, continuity, relevance) for optimal focus.
 - 💡 **Strategy-Guided Question Planning**: Decouples *what to discuss* (scheduler target) from *how to ask* (question strategy), planning targeted inquiries across six strategies: `explore`, `fill_gap`, `deepen`, `resolve_conflict`, `verify`, and `confirm_control`.
-- 🛡️ **Strict Context Budgeting & Rule Fallback**: Employs a 13-block isolated prompt contract with P7~P4 priority-based progressive context trimming. If API limits are exceeded or model calls fail, the system falls back gracefully to structured heuristic templates without crashing.
+- 🛡️ **Strict Context Budgeting & Failure Exposure**: Employs a 13-block isolated prompt contract with P7~P4 priority-based progressive context trimming. If budget is exceeded or model calls fail after retries, the engine immediately halts progression and exposes the error without masking failures or committing incomplete state.
 - 🔒 **15 State Invariant Guardrails**: Formal business validation rules eliminate orphan slots, cross-topic data leaks, invalid state transitions, and dangling dependencies.
 
 ---
@@ -69,9 +69,8 @@ flowchart TD
         Q --> R[QuestionContextBuilder]
         R --> S[ContextBudgetManager]
         S --> T[QuestionGenerator: 13 Isolated Blocks]
-        T -->|Exception / Over-budget| U[Deterministic Rule Fallback]
         T -->|Normal| V[LLM Inference]
-        U & V --> W[StateInvariantValidator Guardrails]
+        V --> W[StateInvariantValidator Guardrails]
     end
 
     W -->|Next Turn| G
@@ -159,7 +158,6 @@ Every interview session stores all state snapshots, events, and audit logs insid
 
 | File | Type | Format & Purpose |
 |---|---|---|
-| `config_snapshot.yaml` | YAML | Sanitized runtime configuration snapshot frozen at initialization |
 | `input.json` | JSON | Project creation metadata (project name, initial requirements, timestamp) |
 | `state.initial.json` | JSON | Baseline state snapshot immediately following Round 0 initialization |
 | `state.json` | JSON | Latest live project state snapshot (can be deleted and 100% reconstructed from events) |
@@ -246,7 +244,7 @@ python scripts/inspect_state.py --project-id <PROJECT_ID>
 *Displays overall progress, section/topic statuses (Ongoing / Pending / Completed), slot values, and dependency topology.*
 
 #### 4. Resume an Interrupted Session (`resume.py`)
-If a session was interrupted by network timeouts or abrupt termination, resume idempotently:
+If a session was interrupted by network timeouts, budget constraints, or abrupt termination, resume idempotently:
 ```bash
 python scripts/resume.py --project-id <PROJECT_ID>
 ```
@@ -257,6 +255,7 @@ Replay historical sessions without making live LLM calls:
 ```bash
 # Mode 1: Event stream state replay (verifies StateReducer determinism)
 python scripts/replay.py --project-id <PROJECT_ID> --mode state
+```
 
 # Mode 2: Full LLM log replay (verifies end-to-end pipeline determinism)
 python scripts/replay.py --project-id <PROJECT_ID> --mode llm
@@ -295,14 +294,14 @@ $$\text{Score}(T) = w_1 \cdot \text{Prior} + w_2 \cdot \text{DepReadiness} + w_3
 
 Prompts use **13 strictly isolated semantic blocks**, preventing system instructions from leaking and stopping hallucinated cross-topic assumptions.
 
-### 6.4 Context Budgeting & Graceful Fallback
+### 6.4 Context Budgeting & Failure Exposure
 `ContextBudgetManager` applies a deterministic progressive trimming ladder (P7 ~ P4):
 - **P7 Trim**: Topic catalog drops down to displaying only the active topic;
 - **P6 Trim**: Cross-topic known facts drop oldest entries;
 - **P5 Trim**: Conversation history trims oldest turn pairs (guaranteeing at least 1 recent pair);
 - **P4 Trim**: Active topic definition drops optional (non-mandatory) slots.
 
-If token counts still exceed caps or the LLM fails, the pipeline returns a **deterministic rule-based fallback question**, logging a `RunError` without interrupting the session.
+If essential context still exceeds budget or model generation fails, the system immediately raises an exception and logs a structured `RunError` without committing Evidence, StateEvents, Decisions, Interviewer Turns, or `state.json`. The pending user turn remains safely resumable after adjusting configuration or environment parameters.
 
 ### 6.5 Invariant Guardrails & Mid-Turn Recovery
 `StateInvariantValidator` continuously enforces 15 formal rules:

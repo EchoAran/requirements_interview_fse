@@ -101,7 +101,7 @@ strategy:
 # 5. Context Budget & Token Management Configuration (Context Budget)
 # ------------------------------------------------------------------------------
 context_budget:
-  # Maximum overall token limit for question generation prompt (exceeding triggers rule fallback)
+  # Maximum overall token limit for question generation prompt (exceeding raises error without committing state)
   max_prompt_tokens: 3500
 
   # Maximum token budget for the recent conversation history block

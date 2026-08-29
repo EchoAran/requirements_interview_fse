@@ -35,19 +35,6 @@ class ProjectStore:
 
         return p_dir
 
-    def save_config_snapshot(self, project_id: str, config_yaml_str: str) -> None:
-        p_dir = self.get_project_dir(project_id)
-        p_dir.mkdir(parents=True, exist_ok=True)
-        config_file = p_dir / "config_snapshot.yaml"
-        with open(config_file, "w", encoding="utf-8") as f:
-            f.write(config_yaml_str)
-
-    def load_config_snapshot(self, project_id: str) -> Optional[str]:
-        config_file = self.get_project_dir(project_id) / "config_snapshot.yaml"
-        if not config_file.exists():
-            return None
-        with open(config_file, "r", encoding="utf-8") as f:
-            return f.read()
 
     def save_initial_state(self, state: ProjectState) -> None:
         p_dir = self.get_project_dir(state.project_id)

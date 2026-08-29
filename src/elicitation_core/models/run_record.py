@@ -14,6 +14,7 @@ class RunError(BaseModel):
         "question_context_budget_exceeded",
         "llm_transport_error",
         "llm_output_error",
+        "llm_configuration_error",
         "schema_validation_error",
         "state_invariant_error",
         "storage_error",

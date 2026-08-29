@@ -147,7 +147,6 @@ class ElicitationPipeline:
                 "initial_requirements": initial_requirements,
             },
         )
-        store.save_config_snapshot(pid, cfg.to_sanitized_yaml())
 
         pipeline = cls(project_id=pid, config=cfg, store=store)
         pipeline._init_project_name = project_name
@@ -174,24 +173,11 @@ class ElicitationPipeline:
         config: Optional[AppConfig] = None,
         base_runs_dir: Optional[Path | str] = None,
     ) -> "ElicitationPipeline":
-        """Resumes an interrupted project session from its config snapshot and validates state invariants and schema."""
-        store = ProjectStore(base_runs_dir=base_runs_dir or Path("runs"))
+        """Resumes an interrupted project session using the provided or default configuration and validates state invariants and schema."""
+        cfg = config or AppConfig()
+        store = ProjectStore(base_runs_dir=base_runs_dir or cfg.get_runs_path())
         if not store.project_exists(project_id):
             raise FileNotFoundError(f"Project not found to resume: {project_id}")
-
-        # Restore configuration from project snapshot if available
-        snapshot_yaml = store.load_config_snapshot(project_id)
-        if snapshot_yaml:
-            try:
-                snap_dict = yaml.safe_load(snapshot_yaml) or {}
-                cfg = AppConfig(**snap_dict)
-            except Exception:
-                cfg = config or AppConfig()
-        else:
-            cfg = config or AppConfig()
-
-        if base_runs_dir:
-            store.base_runs_dir = Path(base_runs_dir)
 
         # Load latest state snapshot from project store
         state = store.load_state(project_id)
@@ -458,19 +444,6 @@ class ElicitationPipeline:
             res = await self._execute_step_logic(state, current_topic, user_turn_id, next_turn_idx, effective_answer)
             self.pending_user_turn = None
             return res
-        except (LLMTransportError, LLMOutputError, LLMConfigurationError) as llm_err:
-            self.store.append_error(
-                self.project_id,
-                RunError(
-                    error_id=IdFactory.create_event_id(),
-                    turn_id=user_turn_id,
-                    module="Pipeline.step",
-                    error_type="llm_transport_error" if isinstance(llm_err, LLMTransportError) else "llm_output_error",
-                    message=str(llm_err),
-                    recoverable=True,
-                ),
-            )
-            raise
         except StateInvariantError as inv_err:
             self.store.append_error(
                 self.project_id,
@@ -483,6 +456,10 @@ class ElicitationPipeline:
                     recoverable=False,
                 ),
             )
+            raise
+        except (LLMTransportError, LLMOutputError, LLMConfigurationError, RuntimeError):
+            # Domain and LLM errors are already emitted once by the responsible component
+            # (QuestionGenerator, ContextBudgetManager, LLMClient) with exact error_type.
             raise
         except Exception as ex:
             self.store.append_error(
