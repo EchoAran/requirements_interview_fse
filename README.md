@@ -249,19 +249,19 @@ python scripts/step.py \
 ```
 
 #### 3. Finalize and Generate the Report (`finish.py`)
-After the interview has ended, explicitly finalize the project and generate its report:
+After `step.py` reports that the interview has ended, explicitly archive the completed project and generate its report:
 ```bash
 python scripts/finish.py --project-id <PROJECT_ID>
 ```
 Use `--config <CONFIG_PATH>` (or `-c`) if the project uses a non-default configuration file.
 
-This command calls `Pipeline.finish()`, validates the persisted state, and writes `final_state.json` and `summary.md` under `runs/<PROJECT_ID>/`. Report generation is never triggered automatically by `step.py`; the user decides when to run this command. Running it again regenerates both files from the currently persisted state and evidence.
+This command calls `Pipeline.finish()`. Finalization succeeds only when the persisted project is already `Completed`, `current_topic_id` is empty, and every topic is either `Completed` or `UserInterrupted`. Otherwise the command exits with `ProjectNotReadyForFinalizationError`; it never completes an active topic, changes business state, or emits business state events. On success it writes `final_state.json` and `summary.md` under `runs/<PROJECT_ID>/`. Report generation is never triggered automatically by `step.py`. Running the command again regenerates both files from the same persisted state and evidence without changing interview state.
 
 #### 4. Inspect Current State (`inspect_state.py`)
 ```bash
 python scripts/inspect_state.py --project-id <PROJECT_ID>
 ```
-*Displays overall progress, section/topic statuses (Ongoing / Pending / Completed), slot values, and dependency topology.*
+*Displays overall progress, section/topic statuses (Pending / Ongoing / SystemInterrupted / UserInterrupted / Completed), slot values, and dependency topology.*
 
 #### 5. Inspect and Continue an Interrupted Session
 If a session was interrupted by a network timeout, budget constraint, invalid model output, or abrupt termination, first validate and inspect the persisted state:

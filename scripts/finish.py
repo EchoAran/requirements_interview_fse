@@ -7,11 +7,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from elicitation_core.config import AppConfig
-from elicitation_core.pipeline import ElicitationPipeline
+from elicitation_core.pipeline import ElicitationPipeline, ProjectNotReadyForFinalizationError
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="Finalize an interview project and generate its report.")
+    parser = argparse.ArgumentParser(description="Archive an already completed interview project and generate its report.")
     parser.add_argument("--project-id", "-p", required=True, help="Project ID.")
     parser.add_argument("--config", "-c", default="configs/default.yaml", help="Path to configuration YAML file.")
     args = parser.parse_args()
@@ -38,6 +38,9 @@ async def main():
         result = await pipeline.finish()
     except FileNotFoundError:
         print(f"Error: Project state not found for ID: {args.project_id}", file=sys.stderr)
+        sys.exit(1)
+    except ProjectNotReadyForFinalizationError as e:
+        print(f"Error: Project not ready for finalization: {e}", file=sys.stderr)
         sys.exit(1)
 
     project_dir = pipeline.store.get_project_dir(args.project_id)

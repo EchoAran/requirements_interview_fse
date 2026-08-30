@@ -203,6 +203,12 @@ class StateReducer:
             raise StateReducerValidationError(f"Slot {target_slot.slot_number} state='empty' but value='{target_slot.value}'")
         if target_slot.state == "filled" and (target_slot.value is None or str(target_slot.value).strip() == ""):
             raise StateReducerValidationError(f"Slot {target_slot.slot_number} state='filled' but value is empty")
+        if target_slot.state == "uncertain":
+            if target_slot.value is None or str(target_slot.value).strip() == "":
+                raise StateReducerValidationError(f"Slot {target_slot.slot_number} state='uncertain' but value is empty")
+            has_uncertain_rev = any(r.operation == "mark_uncertain" for r in target_slot.revisions)
+            if not has_uncertain_rev:
+                raise StateReducerValidationError(f"Slot {target_slot.slot_number} is in uncertain state but no mark_uncertain revision exists")
         if target_slot.state == "conflict":
             has_conflict_rev = any(r.operation == "conflict" for r in target_slot.revisions)
             if not has_conflict_rev:

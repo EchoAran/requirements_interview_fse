@@ -34,12 +34,22 @@ class StateInvariantValidator:
         all_topic_numbers = {t.topic_number for t in all_topics}
         all_section_ids = {s.section_id for s in state.sections}
 
-        # 1. At most one ongoing topic (and 0 when project is Completed)
+        # 1. At most one ongoing topic (and 0 when project is Completed; all topics must be Completed/UserInterrupted)
         ongoing_topics = [t for t in all_topics if t.topic_status == "Ongoing"]
-        if state.project_status == "Completed" and ongoing_topics:
-            errors.append(
-                f"Rule 1 Violation: Project is Completed but found {len(ongoing_topics)} Ongoing topics: {[t.topic_id for t in ongoing_topics]}."
-            )
+        if state.project_status == "Completed":
+            non_terminal = [
+                t for t in all_topics
+                if t.topic_status not in {"Completed", "UserInterrupted"}
+            ]
+            if non_terminal:
+                errors.append(
+                    f"Rule 1 Violation: Project is Completed but found {len(non_terminal)} non-terminal topics: "
+                    f"{[(t.topic_id, t.topic_status) for t in non_terminal]}."
+                )
+            if ongoing_topics:
+                errors.append(
+                    f"Rule 1 Violation: Project is Completed but found {len(ongoing_topics)} Ongoing topics: {[t.topic_id for t in ongoing_topics]}."
+                )
         elif len(ongoing_topics) > 1:
             errors.append(f"Rule 1 Violation: Found {len(ongoing_topics)} Ongoing topics; at most 1 is allowed.")
 
@@ -93,13 +103,22 @@ class StateInvariantValidator:
                             if ev_ref not in known_evidence_ids:
                                 errors.append(f"Rule 7 Violation: Revision '{rev.revision_id}' references unknown evidence '{ev_ref}'.")
 
-        # 8. Conflict slot must have at least one conflict revision
+        # 8. Slot state invariants (conflict, uncertain, filled, empty)
         for top in all_topics:
             for slot in top.slots:
                 if slot.state == "conflict":
                     has_conflict_rev = any(r.operation == "conflict" for r in slot.revisions)
                     if not has_conflict_rev:
                         errors.append(f"Rule 8 Violation: Slot '{slot.slot_id}' has state='conflict' but no revision with operation='conflict'.")
+                elif slot.state == "uncertain":
+                    if slot.value is None or str(slot.value).strip() == "":
+                        errors.append(f"Rule 8 Violation: Slot '{slot.slot_id}' has state='uncertain' but empty value.")
+                    has_uncertain_rev = any(r.operation == "mark_uncertain" for r in slot.revisions)
+                    if not has_uncertain_rev:
+                        errors.append(f"Rule 8 Violation: Slot '{slot.slot_id}' has state='uncertain' but no revision with operation='mark_uncertain'.")
+                elif slot.state == "filled":
+                    if slot.value is None or str(slot.value).strip() == "":
+                        errors.append(f"Rule 8 Violation: Slot '{slot.slot_id}' has state='filled' but empty value.")
 
         # 9. Empty slot must have empty value
         for top in all_topics:

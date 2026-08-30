@@ -53,6 +53,7 @@ class SlotFiller:
                 "slot_number": s.slot_number,
                 "slot_key": s.key,
                 "slot_value": s.value,
+                "state": s.state,
                 "is_necessary": s.is_required,
             }
             for s in target_topic.slots

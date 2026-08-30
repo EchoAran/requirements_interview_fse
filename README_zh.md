@@ -249,19 +249,19 @@ python scripts/step.py \
 ```
 
 #### 3. 手动结项并生成报告 (`finish.py`)
-访谈结束后，由用户显式执行结项命令并生成报告：
+当 `step.py` 已返回访谈结束结果后，由用户显式执行归档命令并生成报告：
 ```bash
 python scripts/finish.py --project-id <PROJECT_ID>
 ```
 如果项目使用的不是默认配置文件，可传入 `--config <CONFIG_PATH>`（或 `-c`）。
 
-该命令调用 `Pipeline.finish()`，校验已持久化状态，并在 `runs/<PROJECT_ID>/` 下写入 `final_state.json` 和 `summary.md`。`step.py` 不会自动触发报告生成；由用户决定何时执行该命令。重复执行时，会根据当前已持久化的状态与证据重新生成这两个文件。
+该命令调用 `Pipeline.finish()`。只有已持久化项目满足以下条件时才能归档：Project 已为 `Completed`、`current_topic_id` 为空，并且所有 Topic 均为 `Completed` 或 `UserInterrupted`。条件不满足时，命令以 `ProjectNotReadyForFinalizationError` 失败；它不会完成活动 Topic、修改业务状态或生成业务状态事件。归档成功后，系统在 `runs/<PROJECT_ID>/` 下写入 `final_state.json` 和 `summary.md`。`step.py` 不会自动触发报告生成；重复执行归档命令只会根据同一份已持久化状态与证据重新生成产物，不改变访谈状态。
 
 #### 4. 检查当前项目状态与槽位 (`inspect_state.py`)
 ```bash
 python scripts/inspect_state.py --project-id <PROJECT_ID>
 ```
-*打印当前项目的整体进度、各章节下各主题的状态（Ongoing / Pending / Completed）、槽位填充详情以及已建立的主题依赖拓扑。*
+*打印当前项目的整体进度、各章节下各主题的状态（Pending / Ongoing / SystemInterrupted / UserInterrupted / Completed）、槽位填充详情以及已建立的主题依赖拓扑。*
 
 #### 5. 检查并继续异常中断的项目
 如果因为网络中断、预算超限、模型输出不合法或进程异常退出导致会话中止，先检查并验证已持久化状态：

@@ -5,7 +5,6 @@ from typing import Optional
 from ..llm.client import LLMClient
 from ..models.interpretation import (
     AffectedTopic,
-    ConflictCandidate,
     EmergentTopicCandidate,
     EvidenceInterpretation,
     EvidenceInterpretationInput,
@@ -172,23 +171,7 @@ class EvidenceInterpreter:
                     )
                 )
 
-        # 3. Parse conflicts and relations
-        raw_conflicts = raw_data.get("explicit_conflicts", [])
-        clean_conflicts: list[ConflictCandidate] = []
-        if isinstance(raw_conflicts, list):
-            for item in raw_conflicts:
-                if isinstance(item, dict):
-                    t_id = valid_topic_map.get(str(item.get("topic_id", "")))
-                    if t_id:
-                        clean_conflicts.append(
-                            ConflictCandidate(
-                                topic_id=t_id,
-                                related_slot_ids=[str(s) for s in item.get("related_slot_ids", []) if isinstance(item.get("related_slot_ids"), list)],
-                                evidence_message_ids=[str(e) for e in item.get("evidence_message_ids", [interpretation_input.latest_turn.user_turn_id])],
-                                description=item.get("description"),
-                            )
-                        )
-
+        # 3. Parse depends_on topic relations
         raw_relations = raw_data.get("relation_candidates", [])
         clean_relations: list[RelationCandidate] = []
         if isinstance(raw_relations, list):
@@ -197,12 +180,12 @@ class EvidenceInterpreter:
                     s_id = valid_topic_map.get(str(item.get("source_topic_id", "")))
                     tgt_id = valid_topic_map.get(str(item.get("target_topic_id", "")))
                     rel_type = item.get("relation_type", "depends_on")
-                    if s_id and tgt_id and s_id != tgt_id and rel_type in ("depends_on", "related_to"):
+                    if s_id and tgt_id and s_id != tgt_id and rel_type == "depends_on":
                         clean_relations.append(
                             RelationCandidate(
                                 source_topic_id=s_id,
                                 target_topic_id=tgt_id,
-                                relation_type=rel_type,
+                                relation_type="depends_on",
                                 evidence_message_ids=[str(e) for e in item.get("evidence_message_ids", [interpretation_input.latest_turn.user_turn_id])],
                             )
                         )
@@ -210,6 +193,5 @@ class EvidenceInterpreter:
         return EvidenceInterpretation(
             affected_existing_topics=clean_affected,
             emergent_topic_candidates=clean_emergent,
-            explicit_conflicts=clean_conflicts,
             relation_candidates=clean_relations,
         )

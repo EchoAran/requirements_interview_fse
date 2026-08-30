@@ -16,6 +16,7 @@ class RunError(BaseModel):
         "llm_configuration_error",
         "schema_validation_error",
         "state_invariant_error",
+        "project_not_ready_for_finalization",
         "storage_error",
         "runtime_error",
     ]

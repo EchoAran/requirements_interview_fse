@@ -12,6 +12,7 @@ class SlotRevision(BaseModel):
         "update",
         "refine",
         "conflict",
+        "mark_uncertain",
         "invalidate",
         "clear"
     ]

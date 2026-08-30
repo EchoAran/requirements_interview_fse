@@ -2,7 +2,7 @@ from typing import Optional
 from ..models.event import EvidenceRef
 from ..models.scheduling import IntentDecision, SchedulerDecision
 from ..models.state import ProjectState, TopicState
-from ..models.strategy import QuestionPlan, StrategyCode
+from ..models.strategy import QuestionPlan
 from ..services.state_view import StateView
 
 STRATEGY_INSTRUCTIONS: dict[str, str] = {
@@ -44,8 +44,8 @@ QUESTION_STRATEGY_INSTRUCTIONS = STRATEGY_INSTRUCTIONS
 class StrategySelector:
     """Selects question strategy and produces structured QuestionPlan based on Topic state signals and conversation intent."""
 
-    def __init__(self, completion_threshold: float = 0.6):
-        self.completion_threshold = completion_threshold
+    def __init__(self):
+        pass
 
     def select_plan(
         self,
@@ -117,31 +117,3 @@ class StrategySelector:
             topic_id=topic_id,
             transition_from_topic_id=transition_from_topic_id,
         )
-
-    @staticmethod
-    def compute_completion(topic: TopicState) -> float:
-        if not topic.slots:
-            return 0.0
-
-        target_slots = [s for s in topic.slots if s.is_required] or topic.slots
-        filled = [
-            s for s in target_slots
-            if s.value is not None and str(s.value).strip() != ""
-        ]
-        return len(filled) / len(target_slots)
-
-    def select(self, topic: TopicState) -> tuple[str, str, float]:
-        """Calculates completion and maps to exploration code."""
-        c = self.compute_completion(topic)
-        if c == 0.0:
-            code = "S1"
-        elif 0.0 < c < self.completion_threshold:
-            code = "S2"
-        elif self.completion_threshold <= c < 1.0:
-            code = "S3"
-        else:
-            code = "S4"
-
-        legacy_map = {"S1": "explore", "S2": "fill_gap", "S3": "deepen", "S4": "verify"}
-        inst = STRATEGY_INSTRUCTIONS.get(code, STRATEGY_INSTRUCTIONS.get(legacy_map.get(code, "fill_gap"), ""))
-        return code, inst, c

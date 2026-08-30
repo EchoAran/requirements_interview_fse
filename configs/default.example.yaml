@@ -148,9 +148,6 @@ runtime:
   # Base directory path for prompt template text files
   prompts_dir: "prompts"
 
-  # Completion threshold for required slots to trigger the 'verify' convergence strategy
-  strategy_completion_threshold: 0.60
-
   # Topological sort weight for dependency graph depth and connectivity
   priority_dep_weight: 0.60
 

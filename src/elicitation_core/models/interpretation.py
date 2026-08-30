@@ -51,24 +51,16 @@ class EmergentTopicCandidate(BaseModel):
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
 
 
-class ConflictCandidate(BaseModel):
-    topic_id: str
-    related_slot_ids: list[str] = Field(default_factory=list)
-    evidence_message_ids: list[str] = Field(default_factory=list)
-    description: Optional[str] = None
-
-
 class RelationCandidate(BaseModel):
     source_topic_id: str
     target_topic_id: str
-    relation_type: Literal["depends_on", "related_to"] = "depends_on"
+    relation_type: Literal["depends_on"] = "depends_on"
     evidence_message_ids: list[str] = Field(default_factory=list)
 
 
 class EvidenceInterpretation(BaseModel):
     affected_existing_topics: list[AffectedTopic] = Field(default_factory=list)
     emergent_topic_candidates: list[EmergentTopicCandidate] = Field(default_factory=list)
-    explicit_conflicts: list[ConflictCandidate] = Field(default_factory=list)
     relation_candidates: list[RelationCandidate] = Field(default_factory=list)
 
 

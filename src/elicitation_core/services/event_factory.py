@@ -19,6 +19,8 @@ class EventFactory:
 
         if proposed_op == "conflict":
             return "conflict"
+        if proposed_op == "mark_uncertain" and not new_empty:
+            return "mark_uncertain"
         if old_empty and not new_empty:
             return "add"
         if not old_empty and new_empty:
@@ -104,6 +106,9 @@ class EventFactory:
         elif op == "conflict":
             new_state = "conflict"
             effective_val = slot.value  # Retain previous candidate in value while marking conflict
+        elif op == "mark_uncertain":
+            new_state = "uncertain"
+            effective_val = effective_new_val
         else:
             new_state = "filled"
             effective_val = effective_new_val

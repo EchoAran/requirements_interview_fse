@@ -40,6 +40,11 @@ from .runtime.strategy_selector import StrategySelector
 from .runtime.question_generator import QuestionGenerator
 
 
+class ProjectNotReadyForFinalizationError(Exception):
+    """Raised when finish() is called before all topics and project have reached final terminal state."""
+    pass
+
+
 class ElicitationPipeline:
     """Core orchestration pipeline coordinating initialization, dynamic scheduling, strategy selection, invariant validation, and question generation."""
 
@@ -75,7 +80,7 @@ class ElicitationPipeline:
         self.structure_evolver = StructureEvolver(self._llm_client, prompts_dir=prompts_dir)
         self.slot_filler = SlotFiller(self._llm_client, prompts_dir=prompts_dir)
 
-        # Dynamic scheduling and intent controller components
+        # Dynamic scheduling and user control components
         self.intent_controller = IntentController(
             self._llm_client,
             prompts_dir=prompts_dir,
@@ -85,9 +90,7 @@ class ElicitationPipeline:
         self.scheduler = Scheduler(weights=self.config.runtime.scheduler.weights)
 
         # Strategy selection and follow-up question generation components
-        self.strategy_selector = StrategySelector(
-            completion_threshold=self.config.runtime.strategy_completion_threshold
-        )
+        self.strategy_selector = StrategySelector()
         self.context_builder = QuestionContextBuilder()
         self.question_generator = QuestionGenerator(
             self._llm_client,
@@ -622,6 +625,17 @@ class ElicitationPipeline:
                 current_in_preview.topic_status = "Completed"
 
             if intent_decision.intent == "stop_interview":
+                for top in preview_state.get_all_topics():
+                    if top.topic_id != current_topic.topic_id and top.topic_status not in ("Completed", "UserInterrupted"):
+                        int_ev = EventFactory.create_topic_status_changed_event(
+                            topic=top,
+                            new_status="UserInterrupted",
+                            turn_id=user_turn_id,
+                            evidence_refs=[user_ev.evidence_id],
+                        )
+                        step_events.append(int_ev)
+                        top.topic_status = "UserInterrupted"
+
                 proj_event = EventFactory.create_project_status_changed_event(
                     project_id=self.project_id,
                     old_status=state.project_status,
@@ -681,6 +695,11 @@ class ElicitationPipeline:
                                 user_facing_reason=f"Current topic is completed, transitioning to: '{best_t.topic_content}'",
                             )
                     else:
+                        non_term = [t for t in preview_state.get_all_topics() if t.topic_status not in {"Completed", "UserInterrupted"}]
+                        if non_term:
+                            raise RuntimeError(
+                                f"Scheduler returned no candidate topic, but non-terminal topics remain: {[t.topic_id for t in non_term]}"
+                            )
                         proj_event = EventFactory.create_project_status_changed_event(
                             project_id=self.project_id,
                             old_status=state.project_status,
@@ -719,6 +738,11 @@ class ElicitationPipeline:
                             user_facing_reason=f"Current topic is completed, transitioning to: '{best_t.topic_content}'",
                         )
                 else:
+                    non_term = [t for t in preview_state.get_all_topics() if t.topic_status not in {"Completed", "UserInterrupted"}]
+                    if non_term:
+                        raise RuntimeError(
+                            f"Scheduler returned no candidate topic, but non-terminal topics remain: {[t.topic_id for t in non_term]}"
+                        )
                     proj_event = EventFactory.create_project_status_changed_event(
                         project_id=self.project_id,
                         old_status=state.project_status,
@@ -734,19 +758,24 @@ class ElicitationPipeline:
         elif not intent_decision.needs_confirmation and intent_decision.intent != "none":
             # Case 1: High-confidence explicit user control on unaccepted topic (stop, refuse, switch, return)
             if intent_decision.intent == "stop_interview":
+                for top in preview_state.get_all_topics():
+                    if top.topic_status not in ("Completed", "UserInterrupted"):
+                        int_ev = EventFactory.create_topic_status_changed_event(
+                            topic=top,
+                            new_status="UserInterrupted",
+                            turn_id=user_turn_id,
+                            evidence_refs=[user_ev.evidence_id],
+                        )
+                        step_events.append(int_ev)
+                        top.topic_status = "UserInterrupted"
+
                 proj_event = EventFactory.create_project_status_changed_event(
                     project_id=self.project_id,
                     old_status=state.project_status,
                     new_status="Completed",
                     turn_id=user_turn_id,
                 )
-                top_ev = EventFactory.create_topic_status_changed_event(
-                    topic=current_topic,
-                    new_status="UserInterrupted",
-                    turn_id=user_turn_id,
-                    evidence_refs=[user_ev.evidence_id],
-                )
-                step_events.extend([top_ev, proj_event])
+                step_events.append(proj_event)
                 is_interview_finished = True
                 finish_msg = "The interviewee chose to terminate the interview. Thank you for your participation!"
                 next_topic = None
@@ -790,6 +819,11 @@ class ElicitationPipeline:
                             user_facing_reason=f"Interviewee requested to skip the current topic, transitioning to: '{target_t.topic_content}'",
                         )
                 else:
+                    non_term = [t for t in preview_state.get_all_topics() if t.topic_status not in {"Completed", "UserInterrupted"}]
+                    if non_term:
+                        raise RuntimeError(
+                            f"Scheduler returned no candidate topic after refuse, but non-terminal topics remain: {[t.topic_id for t in non_term]}"
+                        )
                     proj_event = EventFactory.create_project_status_changed_event(
                         project_id=self.project_id,
                         old_status=state.project_status,
@@ -895,6 +929,11 @@ class ElicitationPipeline:
                         selected_op_str = "maintain_current_topic"
                         transition = QuestionTransition(kind="maintain")
             else:
+                non_term = [t for t in preview_state.get_all_topics() if t.topic_status not in {"Completed", "UserInterrupted"}]
+                if non_term:
+                    raise RuntimeError(
+                        f"Scheduler returned no candidate topic, but non-terminal topics remain: {[t.topic_id for t in non_term]}"
+                    )
                 proj_event = EventFactory.create_project_status_changed_event(
                     project_id=self.project_id,
                     old_status=state.project_status,
@@ -1067,38 +1106,47 @@ class ElicitationPipeline:
         )
 
     async def finish(self) -> StepResult:
-        """Explicitly finishes the interview project with invariant gate, final_state.json, and summary.md."""
+        """Explicitly finalizes an already completed interview project by verifying preconditions, running invariants, and exporting artifacts.
+
+        Does NOT mutate or generate any business state events.
+        """
         state = self.store.load_state(self.project_id)
         evidences = self.store.load_evidences(self.project_id)
         events = self.store.load_state_events(self.project_id)
         decisions = self.store.load_decisions(self.project_id)
         known_ev_ids = {e.evidence_id for e in evidences}
 
-        finish_events: list[StateEvent] = []
-        if state.project_status != "Completed":
-            last_turn_id = IdFactory.create_turn_id(state.turn_index)
-            finish_event = EventFactory.create_project_status_changed_event(
-                project_id=self.project_id,
-                old_status=state.project_status,
-                new_status="Completed",
-                turn_id=last_turn_id,
+        # 1. Precondition checks for finalization
+        all_topics = state.get_all_topics()
+        terminal_statuses = {"Completed", "UserInterrupted"}
+        non_terminal_topics = [t for t in all_topics if t.topic_status not in terminal_statuses]
+
+        if (
+            state.project_status != "Completed"
+            or state.current_topic_id is not None
+            or len(non_terminal_topics) > 0
+        ):
+            msg = (
+                f"Project '{self.project_id}' is not ready for finalization: "
+                f"project_status='{state.project_status}', current_topic_id='{state.current_topic_id}', "
+                f"non_terminal_topics={[(t.topic_id, t.topic_status) for t in non_terminal_topics]}."
             )
-            finish_events.append(finish_event)
-            # If current ongoing topic exists, complete it
-            curr_t = state.get_current_topic()
-            if curr_t:
-                comp_top_ev = EventFactory.create_topic_status_changed_event(
-                    curr_t, "Completed", turn_id=last_turn_id
-                )
-                finish_events.append(comp_top_ev)
+            err = RunError(
+                error_id=IdFactory.create_event_id(),
+                turn_id=None,
+                module="Pipeline.finish",
+                error_type="project_not_ready_for_finalization",
+                message=msg,
+                recoverable=True,
+            )
+            self.store.append_error(self.project_id, err)
+            raise ProjectNotReadyForFinalizationError(msg)
 
-            StateReducer.apply(state, finish_events, strict_validation=False)
-
-        # Mandatory Invariant Gate check before writing state.json or final_state.json!
+        # 2. Mandatory Invariant Gate check
         inv_errors = StateInvariantValidator.validate_all(
             state=state,
             known_evidence_ids=known_ev_ids,
-            events=events + finish_events,
+            events=events,
             decisions=decisions,
         )
         if inv_errors:
@@ -1113,11 +1161,7 @@ class ElicitationPipeline:
             self.store.append_error(self.project_id, err)
             raise StateInvariantError(rule_id=0, message="; ".join(inv_errors))
 
-        if finish_events:
-            self.store.append_state_events(self.project_id, finish_events)
-            self.store.save_state(state)
-
-        # Export final_state.json and summary.md
+        # 3. Export final_state.json and summary.md (Pure finalization / idempotent)
         self.store.save_final_state(state)
         summary_md_content = SummaryGenerator.generate_markdown(state, evidences)
         self.store.save_summary_md(self.project_id, summary_md_content)
@@ -1128,5 +1172,5 @@ class ElicitationPipeline:
             is_finished=True,
             finish_message="Interview session successfully completed and archived.",
             next_question="",
-            state_events=finish_events,
+            state_events=[],
         )

@@ -88,7 +88,6 @@ class RuntimeConfig(BaseModel):
     save_prompt_text: bool = Field(default=True)
     runs_dir: str = Field(default="runs")
     prompts_dir: str = Field(default="prompts")
-    strategy_completion_threshold: float = Field(default=0.6)
     operation_selection_theta: float = Field(default=0.6)
     priority_dep_weight: float = Field(default=0.6)
     priority_section_weight: float = Field(default=0.4)

@@ -164,7 +164,6 @@ Configures storage invariants, turn guardrails, logging detail, and topological 
 | `save_prompt_text` | `bool` | `true` | Records rendered prompts into `llm_calls.jsonl` for offline reproducibility. |
 | `runs_dir` | `str` | `"runs"` | Root directory path for project runtime output artifacts (relative or absolute). |
 | `prompts_dir` | `str` | `"prompts"` | Directory path containing system prompt templates. |
-| `strategy_completion_threshold`| `float`| `0.60`| Completion threshold. When mandatory slots have $\ge 60\%$ fill rate with zero missing required slots, the pipeline transitions to `verify`. |
 | `priority_dep_weight` | `float` | `0.60` | Weight for dependency depth and connectivity in static topological sorting. |
 | `priority_section_weight` | `float` | `0.40` | Weight for natural section sequence in static topological sorting. |
 
