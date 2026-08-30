@@ -20,7 +20,7 @@ class SlotDigest(BaseModel):
     value: Optional[Any] = None
     is_required: bool = True
     state: str = "empty"
-    origin: str = "seed"
+    origin: str = "initial"
 
 
 class TopicCatalogItem(BaseModel):
@@ -28,7 +28,7 @@ class TopicCatalogItem(BaseModel):
     topic_number: str
     topic_content: str
     status: str
-    origin: str = "seed"
+    origin: str = "initial"
 
 
 class KnownSlotFact(BaseModel):
@@ -109,7 +109,6 @@ class QuestionGenerationInput(BaseModel):
     project_known_info: list[KnownInfoDigest] = Field(default_factory=list)
     scheduler_transition: Optional[QuestionTransition] = None
     other_slots_omitted_count: int = Field(default=0, ge=0)
-
 
 
 

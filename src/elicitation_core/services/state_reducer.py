@@ -233,6 +233,8 @@ class StateReducer:
                     if top.topic_id != target_topic.topic_id and top.topic_status == "Ongoing":
                         top.topic_status = "SystemInterrupted"
             state.current_topic_id = target_topic.topic_id
+        elif state.current_topic_id == target_topic.topic_id:
+            state.current_topic_id = None
 
     @classmethod
     def _apply_topic_created(cls, state: ProjectState, event: StateEvent, strict_validation: bool = True) -> None:
@@ -270,6 +272,8 @@ class StateReducer:
     def _apply_project_status_changed(cls, state: ProjectState, event: StateEvent, strict_validation: bool = True) -> None:
         new_status = str(event.after.get("project_status", state.project_status))
         state.project_status = new_status
+        if new_status == "Completed":
+            state.current_topic_id = None
 
     @classmethod
     def _apply_dependency_added(cls, state: ProjectState, event: StateEvent, strict_validation: bool = True) -> None:

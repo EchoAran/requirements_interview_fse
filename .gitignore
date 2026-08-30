@@ -43,3 +43,5 @@ configs/**
 
 tests/
 .pytest_cache/
+
+runs/

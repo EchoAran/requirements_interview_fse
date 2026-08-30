@@ -47,7 +47,7 @@
 
 ```mermaid
 flowchart TD
-    A[用户原始需求 / 种子描述] -->|Pipeline.initialize| B[初始框架生成 ScaffoldGenerator]
+    A[用户原始需求 / 初始描述] -->|Pipeline.initialize| B[初始框架生成 ScaffoldGenerator]
     B --> C[初始槽位预填 ProjectPrefiller]
     C --> D[依赖关系构建 DependencyBuilder]
     D --> E[(基线状态 state.initial.json)]
@@ -74,9 +74,9 @@ flowchart TD
     end
 
     W -->|下一轮| G
-    W -->|访谈完成/终止| X[Pipeline.finish]
-    X --> Y[(最终状态 final_state.json)]
-    X --> Z[导出需求规格说明 summary.md]
+    W -->|访谈完成/终止| X[等待用户显式结项]
+    X -->|scripts/finish.py 调用 Pipeline.finish| Y[(最终状态 final_state.json)]
+    X -->|scripts/finish.py 调用 Pipeline.finish| Z[生成需求规格说明 summary.md]
 ```
 
 ---
@@ -92,7 +92,7 @@ semi_structured_interview_fse/
 │   └── configuration.md                # 详细配置项说明与调优参考指南
 ├── prompts/                            # 提示词模板层 (普通文本资源)
 │   ├── framework_generation.txt        # 初始框架生成
-│   ├── initial_slots_filling.txt       # 种子槽位预填
+│   ├── initial_slots_filling.txt       # 初始槽位预填
 │   ├── topic_dependency.txt            # 初始依赖识别
 │   ├── intent_detection.txt            # 交互控制意图识别
 │   ├── evidence_interpretation.txt     # 跨主题证据解释与候选涌现
@@ -131,7 +131,7 @@ semi_structured_interview_fse/
 │       │   └── summary_generator.py    # 结项 Markdown 需求规格生成器
 │       ├── initialization/             # 初始化子域
 │       │   ├── scaffold_generator.py   # 大纲与章节结构初始化
-│       │   ├── prefiller.py            # 初始种子信息提取与槽位预填
+│       │   ├── prefiller.py            # 初始信息提取与槽位预填
 │       │   └── dependency_builder.py   # 主题依赖拓扑构建与先验排序
 │       └── runtime/                    # 运行时交互与推理子域
 │           ├── evidence_interpreter.py # 证据跨主题关联与演化分析
@@ -144,6 +144,7 @@ semi_structured_interview_fse/
 ├── scripts/                            # 核心 CLI 交互工具
 │   ├── init_project.py                 # 初始化访谈项目
 │   ├── step.py                         # 推进对话轮次
+│   ├── finish.py                       # 显式结项并生成报告
 │   ├── resume.py                       # 中断恢复与状态自愈
 │   ├── inspect_state.py                # 检查项目状态快照与槽位完成度
 │   └── replay.py                       # 离线事件流重放 / 离线 LLM 重放
@@ -161,8 +162,8 @@ semi_structured_interview_fse/
 | `input.json` | JSON | 原始项目创建参数（项目名称、初始输入文本、创建时间等） |
 | `state.initial.json` | JSON | Round 0 初始化阶段完成后的基线状态快照 |
 | `state.json` | JSON | 当前最新的项目运行时状态快照（可随时删除并由事件流 100% 确定性重建） |
-| `final_state.json` | JSON | 访谈正常结束后的最终不可变状态快照（`project_status = "Completed"`） |
-| `summary.md` | Markdown | 结项时自动导出的结构化需求规格说明书 |
+| `final_state.json` | JSON | 用户执行 `scripts/finish.py` 后写入的最终不可变状态快照 |
+| `summary.md` | Markdown | 用户执行 `scripts/finish.py` 后生成的结构化需求规格说明书 |
 | `state_events.jsonl` | JSONL | 严格按时间顺序单调追加的不可变状态事件流（Event Sourcing 主源） |
 | `evidence.jsonl` | JSONL | 结构化证据记录流，完整保留用户发言及来源上下文 |
 | `turns.jsonl` | JSONL | 双向对话轮次记录（Interviewer / Interviewee），关联决策 ID 与提问策略元数据 |
@@ -222,14 +223,22 @@ $env:LLM_API_KEY="your-api-key"
 
 ### 5.2 核心 CLI 工具使用
 
-系统提供了 5 个标准命令行工具，支持端到端交互与离线运维：
+系统提供了 6 个标准命令行工具，支持端到端交互与离线运维：
 
 #### 1. 初始化访谈项目 (`init_project.py`)
-```bash
-python scripts/init_project.py \
-  --name "高校大型仪器共享系统" \
-  --requirements "我们学校需要一套大型科研仪器共享管理平台，支持全校师生线上预约使用，需按小时计费，并提供设备使用冲突时的审批机制。"
+先准备输入 JSON 文件，例如 `project_input.json`：
+```json
+{
+  "project_name": "高校大型仪器共享系统",
+  "initial_requirements": "我们学校需要一套大型科研仪器共享管理平台，支持全校师生线上预约使用，需按小时计费，并提供设备使用冲突时的审批机制。"
+}
 ```
+然后通过 `--input`（或 `-i`）初始化项目：
+```bash
+python scripts/init_project.py --input project_input.json
+```
+如需覆盖默认的 `configs/default.yaml` 配置，可传入 `--config <CONFIG_PATH>`（或 `-c`）。
+
 *执行成功后，终端将输出 `project_id`（例如 `proj_20260829_abc123`）及生成的首轮开放式探索提问。*
 
 #### 2. 推进对话轮次 (`step.py`)
@@ -239,19 +248,38 @@ python scripts/step.py \
   --answer "核心服务对象包括校内师生和校外科研单位，其中校内师生免费提供基础时长，校外人员按小时标准收费。"
 ```
 
-#### 3. 检查当前项目状态与槽位 (`inspect_state.py`)
+#### 3. 手动结项并生成报告 (`finish.py`)
+访谈结束后，由用户显式执行结项命令并生成报告：
+```bash
+python scripts/finish.py --project-id <PROJECT_ID>
+```
+如果项目使用的不是默认配置文件，可传入 `--config <CONFIG_PATH>`（或 `-c`）。
+
+该命令调用 `Pipeline.finish()`，校验已持久化状态，并在 `runs/<PROJECT_ID>/` 下写入 `final_state.json` 和 `summary.md`。`step.py` 不会自动触发报告生成；由用户决定何时执行该命令。重复执行时，会根据当前已持久化的状态与证据重新生成这两个文件。
+
+#### 4. 检查当前项目状态与槽位 (`inspect_state.py`)
 ```bash
 python scripts/inspect_state.py --project-id <PROJECT_ID>
 ```
 *打印当前项目的整体进度、各章节下各主题的状态（Ongoing / Pending / Completed）、槽位填充详情以及已建立的主题依赖拓扑。*
 
-#### 4. 恢复异常中断的项目 (`resume.py`)
-如果因为网络中断、预算超限或人工暂停导致会话中止，直接使用 `resume.py` 进行幂等恢复与状态自愈：
+#### 5. 检查并继续异常中断的项目
+如果因为网络中断、预算超限、模型输出不合法或进程异常退出导致会话中止，先检查并验证已持久化状态：
 ```bash
 python scripts/resume.py --project-id <PROJECT_ID>
 ```
+不带额外参数时，`resume.py` 只会验证状态快照、事件流、决策与对话轮次，并显示当前会话状态。
 
-#### 5. 离线确定性重放验证 (`replay.py`)
+如果异常发生前已经写入 Interviewee Turn，请在仓库根目录执行：
+```bash
+python scripts/resume.py --project-id <PROJECT_ID> --continue-pending
+```
+该命令会复用已持久化的原回答及原 Turn ID。如果继续执行再次失败，pending turn 会保留供后续重试；只有整轮成功完成后才会清除。
+
+> [!WARNING]
+> pending turn 存在时不要重新执行 `scripts/step.py --answer ...`。`step.py` 使用普通加载路径，可能重复追加 Interviewee Turn，而不是恢复已经记录的回答。
+
+#### 6. 离线确定性重放验证 (`replay.py`)
 支持在无需调用大模型 API 的情况下，对历史访谈记录进行确定性严格比对与推演校验：
 
 ```bash
@@ -312,7 +340,7 @@ Prompt 模板采用 **13 个严格语义区块隔离设计**，隔离系统指�
 - 事件 ID、决策 ID、轮次 ID 全局单调递增且唯一；
 - 冲突状态槽位必须包含至少一条冲突修订版本。
 
-当会话在轮次中途发生异常（例如受访者发言已被记录但后续推理崩溃），`ElicitationPipeline.resume()` 可无损识别该轮挂起状态，在不增加冗余轮次与脏事件的前提下无缝恢复执行。
+当异常发生在 Interviewee Turn 已写入、但整轮尚未提交时，`ElicitationPipeline.resume()` 会把位于 `state.turn_index + 1` 的最后一条 Interviewee Turn 识别为 pending。随后调用不带新回答的 `step()`，即可复用原回答和原 Turn ID；冲突的新输入会被拒绝，连续失败不会清除 pending，只有整轮成功后才会清除。实际继续方式请使用快速上手章节中的 `resume.py --continue-pending`；不带该参数时，`resume.py` 只负责验证并显示中断状态。
 
 ---
 

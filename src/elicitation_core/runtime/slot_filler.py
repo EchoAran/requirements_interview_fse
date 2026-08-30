@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from typing import Any, Optional
 from ..llm.client import LLMClient
+from ..llm.exceptions import LLMOutputError
 from ..models.event import EvidenceRef, StateEvent
 from ..models.state import ProjectState, SlotState, TopicState
 from ..services.event_factory import EventFactory
@@ -77,38 +78,98 @@ class SlotFiller:
             module="SlotFiller",
             prompt_name="slots_filling",
         )
-        if not isinstance(raw_result, list):
-            return []
+        for attempt in range(2):
+            if not isinstance(raw_result, list):
+                return []
+
+            proposals: list[dict[str, Any]] = []
+            seen_proposal_keys: set[str] = set()
+            duplicate_slots: set[str] = set()
+            for item_index, item in enumerate(raw_result):
+                if not isinstance(item, dict):
+                    continue
+                s_num = str(item.get("slot_number", "")).strip()
+                s_key = str(item.get("slot_key", "")).strip() or None
+                s_val_raw = item.get("new_value") if "new_value" in item else item.get("slot_value")
+                proposed_op = str(item.get("operation", "")).strip().lower() or None
+
+                if s_val_raw in (None, "None", ""):
+                    val = None
+                elif isinstance(s_val_raw, (list, dict)):
+                    val = json.dumps(s_val_raw, ensure_ascii=False)
+                else:
+                    val = str(s_val_raw).strip()
+                    if val.lower() == "none" or val == "":
+                        val = None
+
+                # Skip None or empty value to strictly prevent clearing existing data
+                if val is None:
+                    continue
+
+                existing_slot = target_topic.find_slot(s_num) if s_num else None
+                if not existing_slot and s_key:
+                    for s in target_topic.slots:
+                        if s.key == s_key:
+                            existing_slot = s
+                            s_num = s.slot_number
+                            break
+
+                if existing_slot:
+                    proposal_key = f"existing:{existing_slot.slot_id}"
+                    slot_label = existing_slot.slot_number
+                elif s_num:
+                    proposal_key = f"new-number:{s_num}"
+                    slot_label = s_num
+                elif s_key:
+                    proposal_key = f"new-key:{s_key}"
+                    slot_label = s_key
+                else:
+                    proposal_key = f"new-anonymous:{item_index}"
+                    slot_label = proposal_key
+
+                if proposal_key in seen_proposal_keys:
+                    duplicate_slots.add(slot_label)
+                seen_proposal_keys.add(proposal_key)
+                proposals.append(
+                    {
+                        "slot_number": s_num,
+                        "slot_key": s_key,
+                        "existing_slot": existing_slot,
+                        "value": val,
+                        "operation": proposed_op,
+                    }
+                )
+
+            if not duplicate_slots:
+                break
+            if attempt == 1:
+                raise LLMOutputError(
+                    "SlotFiller returned multiple proposals for the same slot after retry: "
+                    + ", ".join(sorted(duplicate_slots))
+                )
+
+            correction_prompt = (
+                f"{prompt}\n\n# CORRECTION REQUIRED\n"
+                "Your previous output contained multiple proposals for the same slot(s): "
+                f"{', '.join(sorted(duplicate_slots))}. Return a corrected JSON array with exactly one proposal "
+                "per slot. Semantically combine all compatible grounded facts for each slot; do not discard facts "
+                "and do not treat earlier output items as state updates.\n"
+                f"Previous invalid output:\n{json.dumps(raw_result, ensure_ascii=False)}"
+            )
+            raw_result = await self.llm_client.complete_json(
+                prompt=correction_prompt,
+                turn_id=user_turn_id,
+                module="SlotFiller",
+                prompt_name="slots_filling",
+            )
 
         events: list[StateEvent] = []
-        for item in raw_result:
-            if not isinstance(item, dict):
-                continue
-            s_num = str(item.get("slot_number", "")).strip()
-            s_key = str(item.get("slot_key", "")).strip() or None
-            s_val_raw = item.get("new_value") if "new_value" in item else item.get("slot_value")
-            proposed_op = str(item.get("operation", "")).strip().lower() or None
-
-            if s_val_raw in (None, "None", ""):
-                val = None
-            elif isinstance(s_val_raw, (list, dict)):
-                val = json.dumps(s_val_raw, ensure_ascii=False)
-            else:
-                val = str(s_val_raw).strip()
-                if val.lower() == "none" or val == "":
-                    val = None
-
-            # Skip None or empty value to strictly prevent clearing existing data
-            if val is None:
-                continue
-
-            existing_slot = target_topic.find_slot(s_num) if s_num else None
-            if not existing_slot and s_key:
-                for s in target_topic.slots:
-                    if s.key == s_key:
-                        existing_slot = s
-                        s_num = s.slot_number
-                        break
+        for proposal in proposals:
+            s_num = proposal["slot_number"]
+            s_key = proposal["slot_key"]
+            existing_slot = proposal["existing_slot"]
+            val = proposal["value"]
+            proposed_op = proposal["operation"]
 
             if existing_slot:
                 event, _ = EventFactory.create_slot_value_changed_event(
@@ -143,7 +204,7 @@ class SlotFiller:
                     slot_number=s_num,
                     key=s_key or s_num,
                     value=None,
-                    origin="emergent",
+                    origin="added",
                     is_required=False,
                     state="empty",
                     evidence_refs=list(evidence_ref_ids),

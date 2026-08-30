@@ -47,10 +47,10 @@ class StateView:
         return self._state.get_all_topics()
 
     def get_seed_topics(self) -> list[TopicState]:
-        return [t for t in self.get_all_topics() if t.origin == "seed"]
+        return [t for t in self.get_all_topics() if t.origin == "initial"]
 
     def get_emergent_topics(self) -> list[TopicState]:
-        return [t for t in self.get_all_topics() if t.origin == "emergent"]
+        return [t for t in self.get_all_topics() if t.origin == "added"]
 
     def get_topic_slots(self, topic_id_or_number: str) -> list[SlotState]:
         topic = self.get_topic(topic_id_or_number)
@@ -118,7 +118,7 @@ class StateView:
 
         # Signal 2: Contains filled emergent slots with only 1 evidence
         for s in topic.slots:
-            if s.origin == "emergent" and s.value is not None and str(s.value).strip() != "":
+            if s.origin == "added" and s.value is not None and str(s.value).strip() != "":
                 if len(s.evidence_refs) <= 1:
                     return True
 
@@ -274,7 +274,7 @@ class StateView:
             conflict_ratio = 1.0 if has_conflict else 0.0
 
             # 5. Recent emergence
-            if topic.origin == "emergent":
+            if topic.origin == "added":
                 diff = max(0, turn_idx - topic.created_turn)
                 if diff == 0:
                     recent_emergence = 1.0
@@ -295,7 +295,7 @@ class StateView:
 
             # 7. User relevance
             user_relevance = relevance_map.get(topic.topic_id, relevance_map.get(topic.topic_number, 0.0))
-            if topic.origin == "emergent" and recent_emergence == 1.0 and user_relevance == 0.0:
+            if topic.origin == "added" and recent_emergence == 1.0 and user_relevance == 0.0:
                 user_relevance = 1.0
             if topic.topic_id == self._state.current_topic_id and user_relevance == 0.0:
                 user_relevance = 0.5

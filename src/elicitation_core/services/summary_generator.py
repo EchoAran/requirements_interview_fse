@@ -26,11 +26,11 @@ class SummaryGenerator:
         lines.append("")
 
         all_topics = state.get_all_topics()
-        seed_topics = [t for t in all_topics if t.origin == "seed"]
-        emergent_topics = [t for t in all_topics if t.origin == "emergent"]
+        seed_topics = [t for t in all_topics if t.origin == "initial"]
+        emergent_topics = [t for t in all_topics if t.origin == "added"]
 
         lines.append("## 2. Topic Scaffold & Verification Status")
-        lines.append("| No. | Topic Number | Section | Topic Title & Scope | Origin | Status | Slots Count |")
+        lines.append("| No. | Topic Number | Section | Topic Title & Scope | Source | Status | Slots Count |")
         lines.append("|---|---|---|---|---|---|---|")
         for idx, top in enumerate(all_topics, start=1):
             sec_name = top.section_id
@@ -38,7 +38,7 @@ class SummaryGenerator:
                 if s.section_id == top.section_id:
                     sec_name = s.section_content
                     break
-            origin_badge = "Seed" if top.origin == "seed" else "Emergent"
+            origin_badge = "Initial" if top.origin == "initial" else "Added"
             lines.append(
                 f"| {idx} | `{top.topic_number}` | {sec_name} | {top.topic_content} | {origin_badge} | `{top.topic_status}` | {len(top.slots)} |"
             )
@@ -47,7 +47,7 @@ class SummaryGenerator:
         lines.append("## 3. Slot Requirements & Evidence Traceability")
         for top in all_topics:
             lines.append(f"### Topic: {top.topic_content} (`{top.topic_number}`)")
-            lines.append(f"- **Status**: `{top.topic_status}` | **Origin**: `{top.origin}`")
+            lines.append(f"- **Status**: `{top.topic_status}` | **Source**: `{top.origin.title()}`")
             if top.evidence_refs:
                 top_ev_strs = []
                 for eid in top.evidence_refs:
@@ -91,7 +91,7 @@ class SummaryGenerator:
             lines.append("- *(No emergent topics discovered during this session)*")
 
         emergent_slots = [
-            (t, s) for t in all_topics for s in t.slots if s.origin == "emergent"
+            (t, s) for t in all_topics for s in t.slots if s.origin == "added"
         ]
         if emergent_slots:
             lines.append("")

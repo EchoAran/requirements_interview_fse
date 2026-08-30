@@ -15,6 +15,14 @@ class IntentDecision(BaseModel):
     target_topic_number: Optional[str] = None
     needs_confirmation: bool = False
     raw_explanation: Optional[str] = None
+    verification_outcome: Literal[
+        "not_applicable",
+        "accepted",
+        "revisions_requested",
+        "ambiguous",
+    ] = "not_applicable"
+    verification_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    verification_explanation: Optional[str] = None
 
 
 class TopicSchedulingView(BaseModel):

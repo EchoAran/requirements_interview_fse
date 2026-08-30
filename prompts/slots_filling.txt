@@ -25,7 +25,8 @@
 1. No Data Erasure: Strictly prohibit outputting "None", "null", "N/A", "unknown", or empty strings "" to indicate uncertainty. If a slot was not discussed, do NOT return it.
 2. Grounded Evidence Only: Base updates strictly on explicit statements in the latest turn. Do NOT hallucinate unstated rules or speculate.
 3. Topic Boundary Discipline: Keep facts bounded to [current_topic]. Do not place requirements belonging to other topics into this topic's slots.
-4. Pure JSON Output: Output ONLY a valid JSON array matching the format below (or [] if no incremental updates exist).
+4. One Proposal Per Slot: Output each existing slot_number at most once. If multiple compatible facts from the latest turn belong to the same slot, combine them into one complete slot_value. Evaluate every operation against the original [current_topic_slots] state; output items do not update the state for later items.
+5. Pure JSON Output: Output ONLY a valid JSON array matching the format below (or [] if no incremental updates exist).
 
 # OUTPUT FORMAT (Direct pure JSON array; output [] if no incremental changes):
 [

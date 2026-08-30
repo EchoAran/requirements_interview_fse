@@ -47,7 +47,7 @@ The interview lifecycle is orchestrated by `ElicitationPipeline`, encompassing *
 
 ```mermaid
 flowchart TD
-    A[Initial Requirement / Seed Description] -->|Pipeline.initialize| B[ScaffoldGenerator]
+    A[Initial Requirement / Initial Description] -->|Pipeline.initialize| B[ScaffoldGenerator]
     B --> C[ProjectPrefiller]
     C --> D[DependencyBuilder]
     D --> E[(Baseline state.initial.json)]
@@ -74,9 +74,9 @@ flowchart TD
     end
 
     W -->|Next Turn| G
-    W -->|Session Complete / Terminated| X[Pipeline.finish]
-    X --> Y[(Final final_state.json)]
-    X --> Z[Export Requirements summary.md]
+    W -->|Session Complete / Terminated| X[Await explicit user finalization]
+    X -->|scripts/finish.py calls Pipeline.finish| Y[(Final final_state.json)]
+    X -->|scripts/finish.py calls Pipeline.finish| Z[Generate Requirements summary.md]
 ```
 
 ---
@@ -92,7 +92,7 @@ semi_structured_interview_fse/
 │   └── configuration.md                # Comprehensive configuration guide & tuning reference
 ├── prompts/                            # System prompt templates
 │   ├── framework_generation.txt        # Initial scaffold generation
-│   ├── initial_slots_filling.txt       # Seed slot prefilling
+│   ├── initial_slots_filling.txt       # Initial slot prefilling
 │   ├── topic_dependency.txt            # Initial dependency identification
 │   ├── intent_detection.txt            # User control intent detection
 │   ├── evidence_interpretation.txt     # Cross-topic interpretation & emergence
@@ -131,7 +131,7 @@ semi_structured_interview_fse/
 │       │   └── summary_generator.py    # Final Markdown requirements specification exporter
 │       ├── initialization/             # Initialization domain
 │       │   ├── scaffold_generator.py   # Outline & section generator
-│       │   ├── prefiller.py            # Seed slot prefiller
+│       │   ├── prefiller.py            # Initial slot prefiller
 │       │   └── dependency_builder.py   # Initial topological dependency builder
 │       └── runtime/                    # Runtime interaction & reasoning domain
 │           ├── evidence_interpreter.py # Evidence interpretation & cross-topic association
@@ -144,6 +144,7 @@ semi_structured_interview_fse/
 ├── scripts/                            # Operational CLI tools
 │   ├── init_project.py                 # Initialize a new interview project
 │   ├── step.py                         # Advance dialogue turn
+│   ├── finish.py                       # Explicitly finalize and generate report
 │   ├── resume.py                       # Crash recovery & session resumption
 │   ├── inspect_state.py                # Inspect state snapshot & slot completion
 │   └── replay.py                       # Offline state & LLM call deterministic replay
@@ -161,8 +162,8 @@ Every interview session stores all state snapshots, events, and audit logs insid
 | `input.json` | JSON | Project creation metadata (project name, initial requirements, timestamp) |
 | `state.initial.json` | JSON | Baseline state snapshot immediately following Round 0 initialization |
 | `state.json` | JSON | Latest live project state snapshot (can be deleted and 100% reconstructed from events) |
-| `final_state.json` | JSON | Immutable final snapshot upon session completion (`project_status = "Completed"`) |
-| `summary.md` | Markdown | Automatically exported structured requirements specification document |
+| `final_state.json` | JSON | Immutable final snapshot written when the user runs `scripts/finish.py` |
+| `summary.md` | Markdown | Structured requirements specification generated when the user runs `scripts/finish.py` |
 | `state_events.jsonl` | JSONL | Strictly monotonic, append-only immutable state event stream (Event Sourcing source of truth) |
 | `evidence.jsonl` | JSONL | Raw interviewee statements with structural evidence IDs and turn indexing |
 | `turns.jsonl` | JSONL | Bi-directional dialogue turn history (Interviewer / Interviewee) with strategy metadata |
@@ -223,11 +224,19 @@ $env:LLM_API_KEY="your-api-key"
 ### 5.2 CLI Tools
 
 #### 1. Initialize Interview (`init_project.py`)
-```bash
-python scripts/init_project.py \
-  --name "Lab Equipment Sharing Platform" \
-  --requirements "A university research equipment reservation system supporting online booking, hourly billing, and conflict approvals."
+Prepare an input JSON file, for example `project_input.json`:
+```json
+{
+  "project_name": "Lab Equipment Sharing Platform",
+  "initial_requirements": "A university research equipment reservation system supporting online booking, hourly billing, and conflict approvals."
+}
 ```
+Then initialize the project with `--input` (or `-i`):
+```bash
+python scripts/init_project.py --input project_input.json
+```
+Use `--config <CONFIG_PATH>` (or `-c`) to override the default `configs/default.yaml` configuration.
+
 *Outputs the generated `project_id` (e.g. `proj_20260829_abc123`) and the opening exploratory question.*
 
 #### 2. Advance Dialogue Turn (`step.py`)
@@ -237,19 +246,38 @@ python scripts/step.py \
   --answer "The platform serves faculty, students, and external labs. Internal users get free quotas while external labs pay standard hourly fees."
 ```
 
-#### 3. Inspect Current State (`inspect_state.py`)
+#### 3. Finalize and Generate the Report (`finish.py`)
+After the interview has ended, explicitly finalize the project and generate its report:
+```bash
+python scripts/finish.py --project-id <PROJECT_ID>
+```
+Use `--config <CONFIG_PATH>` (or `-c`) if the project uses a non-default configuration file.
+
+This command calls `Pipeline.finish()`, validates the persisted state, and writes `final_state.json` and `summary.md` under `runs/<PROJECT_ID>/`. Report generation is never triggered automatically by `step.py`; the user decides when to run this command. Running it again regenerates both files from the currently persisted state and evidence.
+
+#### 4. Inspect Current State (`inspect_state.py`)
 ```bash
 python scripts/inspect_state.py --project-id <PROJECT_ID>
 ```
 *Displays overall progress, section/topic statuses (Ongoing / Pending / Completed), slot values, and dependency topology.*
 
-#### 4. Resume an Interrupted Session (`resume.py`)
-If a session was interrupted by network timeouts, budget constraints, or abrupt termination, resume idempotently:
+#### 5. Inspect and Continue an Interrupted Session
+If a session was interrupted by a network timeout, budget constraint, invalid model output, or abrupt termination, first validate and inspect the persisted state:
 ```bash
 python scripts/resume.py --project-id <PROJECT_ID>
 ```
+Without an additional flag, `resume.py` only validates the persisted snapshot, event stream, decisions, and turns, then displays the current session state.
 
-#### 5. Offline Deterministic Replay (`replay.py`)
+If the Interviewee Turn was already recorded before the failure, continue it from the repository root with:
+```bash
+python scripts/resume.py --project-id <PROJECT_ID> --continue-pending
+```
+The command reuses the persisted answer and original Turn ID. If continuation fails again, the pending turn remains available for another retry; it is cleared only after the turn completes successfully.
+
+> [!WARNING]
+> Do not rerun `scripts/step.py --answer ...` for a pending turn. `step.py` uses the normal load path and may append a duplicate Interviewee Turn instead of resuming the recorded one.
+
+#### 6. Offline Deterministic Replay (`replay.py`)
 Replay historical sessions without making live LLM calls:
 
 ```bash
@@ -311,7 +339,7 @@ If essential context still exceeds budget or model generation fails, the system 
 - Monotonically increasing event, decision, and turn IDs;
 - Conflict-tagged slots must possess corresponding conflict revisions.
 
-If an unexpected crash occurs mid-turn, `ElicitationPipeline.resume()` identifies the pending state and seamlessly recovers execution without generating dirty events or duplicate turn records.
+If an unexpected crash occurs after the Interviewee Turn is written but before the turn is committed, `ElicitationPipeline.resume()` recognizes the final Interviewee Turn at `state.turn_index + 1` as pending. Calling `step()` without a new answer reuses the original answer and Turn ID. Conflicting replacement input is rejected, repeated failures retain the pending turn, and the pending marker is cleared only after the complete turn succeeds. Use `resume.py --continue-pending` as shown in the Quick Start guide; without that flag, `resume.py` only validates and displays the interrupted session.
 
 ---
 

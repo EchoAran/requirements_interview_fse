@@ -1,15 +1,18 @@
 # ROLE: Conversational Intent & Dialog Flow Control Analysis Specialist.
-# TASK: Analyze the interviewee's latest response to determine whether they expressed an explicit meta-conversational dialog control request (e.g., terminating the session, refusing/skipping the active topic, requesting an immediate topic switch, returning to a previous topic, or simply providing standard requirement answers).
+# TASK: Analyze the interviewee's latest response along two ORTHOGONAL dimensions:
+# 1. Dialog Flow Control Intent: Determine whether the interviewee expressed an explicit meta-conversational control request (stop interview, refuse/skip topic, switch topic, return to previous topic, or standard response).
+# 2. Topic Verification Outcome: When the interviewer's previous question used the 'verify' strategy to summarize and confirm topic completeness, determine whether the interviewee accepted the summary, requested revisions, or gave an ambiguous response.
 
 # INPUT:
 - Active Topic As [current_topic]: {current_topic_content} (ID: {current_topic_id})
+- Previous Question Strategy: {previous_question_strategy}
 - Latest Turn Exchange As [latest_turn]:
   - Interviewer Question: {interviewer_message}
   - Interviewee Response: {interviewee_message}
 - Topic Catalog As [topic_catalog]:
 {topic_catalog_json}
 
-# INTENT CATEGORIES & DECISION LOGIC:
+# DIMENSION 1: INTENT CATEGORIES & DECISION LOGIC:
 1. `stop_interview`: Interviewee explicitly states a desire to conclude or exit the entire interview session (e.g., "Let's wrap up here", "I want to end the session").
    - target_topic_number: null
 2. `refuse_current_topic`: Interviewee explicitly refuses to answer or requests to skip the active topic (e.g., "I don't know about this part, let's skip it", "I'd rather not discuss this").
@@ -18,20 +21,35 @@
    - target_topic_number: Must be the exact topic_number string (e.g., "topic-1-2") matching the catalog. If no unambiguous match is found, set to null.
 4. `return_previous_topic`: Interviewee explicitly requests to navigate back to a previously discussed topic to revise or add details (e.g., "I want to go back and add something to the authentication part").
    - target_topic_number: The target topic_number if specified, otherwise null.
-5. `none`: Standard interview response. Interviewee is answering questions, elaborating on business logic, providing facts, or casually mentioning other modules without requesting a dialog navigation change.
+5. `none`: Standard interview response. Interviewee is answering questions, confirming summaries, elaborating on business logic, providing facts, or casually mentioning other modules without requesting a dialog navigation change.
    - target_topic_number: null
 
+# DIMENSION 2: TOPIC VERIFICATION OUTCOME (Active ONLY when Previous Question Strategy == "verify"):
+If Previous Question Strategy is NOT "verify":
+- `verification_outcome`: "not_applicable"
+- `verification_confidence`: 0.0
+- `verification_explanation`: null
+
+If Previous Question Strategy is "verify":
+- `accepted`: Interviewee explicitly confirms that the active topic's summary is accurate, complete, and needs no revisions or additions (e.g., "Everything looks solid, nothing to add", "The summary covers all our requirements completely, we can move forward", "All requirements captured accurately, no additions needed").
+- `revisions_requested`: Interviewee points out corrections, missing requirements, caveats, or additional points that must be updated/added (e.g., "Actually we need to add dual approval", "One exception is guest users", "Mostly accurate, but temporary approval also requires an audit trail").
+- `ambiguous`: Interviewee gives a vague, evasive, or unclear response where acceptance cannot be reliably determined (e.g., "I guess so", "Maybe", "Let's leave it like this for now").
+
 # STRICT RULES & GUARDRAILS:
-1. Content Mention vs Meta-Control Boundary: If the interviewee mentions other functional modules in the course of describing business processes (e.g., "During reservation, the user's role permissions are checked"), but DOES NOT explicitly ask to navigate/skip/stop, you MUST classify intent as `none`.
-2. Confidence Calibration: Assign high confidence (confidence >= 0.80) ONLY when the control intention is explicit and unambiguous. For ambiguous or indirect phrasing, assign a lower confidence (0.40 to 0.65) so the system can trigger confirmation.
-3. Target Validation: target_topic_number MUST be an exact topic_number from [topic_catalog] or null. Never hallucinate non-existent topic numbers.
-4. Pure JSON Output: Output ONLY a valid JSON object matching the format below, without markdown backticks or conversational explanations.
+1. Orthogonality: Confirming a summary ("Everything looks solid, we are good to proceed") is `verification_outcome = "accepted"`, and `intent = "none"` (or `switch_existing_topic` if they explicitly name a target topic like "Looks good, let's move to reservation workflows"). DO NOT confuse topic confirmation with `refuse_current_topic`.
+2. Content Mention vs Meta-Control Boundary: If the interviewee mentions other functional modules in the course of describing business processes (e.g., "During reservation, the user's role permissions are checked"), but DOES NOT explicitly ask to navigate/skip/stop, you MUST classify intent as `none`.
+3. Confidence Calibration: Assign high confidence (confidence >= 0.80) ONLY when the control intention or verification outcome is explicit and unambiguous. For ambiguous phrasing, assign a lower confidence (0.40 to 0.65).
+4. Target Validation: target_topic_number MUST be an exact topic_number from [topic_catalog] or null. Never hallucinate non-existent topic numbers.
+5. Pure JSON Output: Output ONLY a valid JSON object matching the format below, without markdown backticks or conversational explanations.
 
 # OUTPUT FORMAT (Direct pure JSON object):
 {
   "intent": "none",
   "confidence": 0.95,
   "target_topic_number": null,
-  "explanation": "The interviewee is directly answering questions regarding the active topic's business requirements."
+  "explanation": "The interviewee explicitly confirms the topic summary is complete and accurate.",
+  "verification_outcome": "accepted",
+  "verification_confidence": 0.98,
+  "verification_explanation": "The interviewee stated that everything looks solid and nothing needs to be revised."
 }
 

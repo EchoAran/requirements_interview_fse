@@ -28,7 +28,7 @@ class SlotState(BaseModel):
     slot_number: str
     key: str
     value: Optional[str] = None
-    origin: Literal["seed", "emergent"] = "seed"
+    origin: Literal["initial", "added"] = "initial"
     is_required: bool = True
     state: Literal["empty", "filled", "uncertain", "conflict"] = "empty"
     evidence_refs: list[str] = Field(default_factory=list)
@@ -40,7 +40,7 @@ class TopicState(BaseModel):
     topic_number: str
     topic_content: str
     topic_status: str = "Pending"  # Pending, Ongoing, Completed, SystemInterrupted, UserInterrupted
-    origin: Literal["seed", "emergent"] = "seed"
+    origin: Literal["initial", "added"] = "initial"
     is_necessary: bool = True
     section_id: str
     slots: list[SlotState] = Field(default_factory=list)

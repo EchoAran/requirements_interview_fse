@@ -262,10 +262,30 @@ class QuestionGenerator:
 
         # 2. Context Budget Check
         if budget_res.is_exceeded:
+            budget_config = self.budget_manager.config
+            violated_constraints = []
+            if budget_res.total_tokens > budget_config.max_prompt_tokens:
+                violated_constraints.append(
+                    f"total_prompt_tokens {budget_res.total_tokens} > "
+                    f"max_prompt_tokens {budget_config.max_prompt_tokens}"
+                )
+            if budget_res.block_tokens["target_and_evidence"] > budget_config.max_target_evidence_tokens:
+                violated_constraints.append(
+                    "target_and_evidence tokens "
+                    f"{budget_res.block_tokens['target_and_evidence']} > "
+                    f"max_target_evidence_tokens {budget_config.max_target_evidence_tokens}"
+                )
+            if budget_res.block_tokens["current_topic_slots"] > budget_config.max_current_slots_tokens:
+                violated_constraints.append(
+                    "current_topic_slots tokens "
+                    f"{budget_res.block_tokens['current_topic_slots']} > "
+                    f"max_current_slots_tokens {budget_config.max_current_slots_tokens}"
+                )
             err_msg = (
-                f"Context budget exceeded: total estimated tokens {budget_res.total_tokens} > "
-                f"max_prompt_tokens {self.budget_manager.config.max_prompt_tokens} "
-                f"(trim reasons: {', '.join(budget_res.trim_reasons)})."
+                f"Context budget exceeded: total estimated tokens {budget_res.total_tokens} "
+                f"(max_prompt_tokens {budget_config.max_prompt_tokens}); "
+                f"violated constraints: {', '.join(violated_constraints)}; "
+                f"trim reasons: {', '.join(budget_res.trim_reasons)}."
             )
             logger.error("question_context_budget_exceeded: %s", err_msg)
             _emit_error("question_context_budget_exceeded", err_msg)

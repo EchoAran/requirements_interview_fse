@@ -524,11 +524,16 @@ class ElicitationPipeline:
         topic_catalog = view.get_topic_catalog()
         project_digest = view.get_project_digest()
 
-        # Detect explicit user control intentions (interrupt, switch, refuse, stop)
+        # Extract previous interviewer turn strategy
+        interviewer_turns = [t for t in all_turns if t.role == "Interviewer"]
+        previous_strategy = interviewer_turns[-1].metadata.get("strategy") if interviewer_turns else None
+
+        # Detect explicit user control intentions and verification outcome
         intent_decision = await self.intent_controller.detect(
             current_topic=current_topic,
             latest_turn=turn_pair,
             topic_catalog=topic_catalog,
+            previous_question_strategy=previous_strategy,
         )
 
         # Interpret evidence across affected existing topics, emergent topics, and cross-topic relations
@@ -603,8 +608,19 @@ class ElicitationPipeline:
         decision: Optional[SchedulerDecision] = None
         decision_id = IdFactory.create_decision_id(next_turn_idx)
 
-        if not intent_decision.needs_confirmation and intent_decision.intent != "none":
-            # Case 1: High-confidence explicit user control
+        if intent_decision.verification_outcome == "accepted":
+            # Topic verification accepted by interviewee: mark current topic Completed
+            comp_top_ev = EventFactory.create_topic_status_changed_event(
+                topic=current_topic,
+                new_status="Completed",
+                turn_id=user_turn_id,
+                evidence_refs=[user_ev.evidence_id],
+            )
+            step_events.append(comp_top_ev)
+            current_in_preview = preview_state.find_topic_by_id(current_topic.topic_id) or preview_state.find_topic_by_number(current_topic.topic_number)
+            if current_in_preview:
+                current_in_preview.topic_status = "Completed"
+
             if intent_decision.intent == "stop_interview":
                 proj_event = EventFactory.create_project_status_changed_event(
                     project_id=self.project_id,
@@ -612,13 +628,125 @@ class ElicitationPipeline:
                     new_status="Completed",
                     turn_id=user_turn_id,
                 )
-                comp_top_ev = EventFactory.create_topic_status_changed_event(
-                    topic=current_topic,
+                step_events.append(proj_event)
+                is_interview_finished = True
+                finish_msg = "The interviewee confirmed topic completion and chose to wrap up the interview. Thank you for your participation!"
+                next_topic = None
+                selected_op_str = "end_current_topic"
+
+            elif intent_decision.intent in ("switch_existing_topic", "return_previous_topic"):
+                target_t = (
+                    preview_state.find_topic_by_id(intent_decision.target_topic_id or "")
+                    or preview_state.find_topic_by_number(intent_decision.target_topic_number or "")
+                )
+                if target_t and target_t.topic_id != current_topic.topic_id:
+                    act_ev = EventFactory.create_topic_status_changed_event(
+                        topic=target_t,
+                        new_status="Ongoing",
+                        turn_id=user_turn_id,
+                        evidence_refs=[user_ev.evidence_id],
+                    )
+                    step_events.append(act_ev)
+                    next_topic = target_t
+                    selected_op_str = "complete_current_topic"
+                    transition = QuestionTransition(
+                        kind="user_requested_switch",
+                        from_topic_title=current_topic.topic_content,
+                        to_topic_title=target_t.topic_content,
+                        user_facing_reason=f"Current topic completed. Transitioning to: '{target_t.topic_content}'",
+                    )
+                else:
+                    # Target invalid or same topic -> fallback to scheduler on preview_state
+                    views = StateView(preview_state, evidence_refs=all_known_evidences).get_scheduling_views(
+                        current_turn_idx=next_turn_idx,
+                        affected_topics=interpretation.affected_existing_topics,
+                    )
+                    decision = self.scheduler.schedule(preview_state, views, current_topic, user_turn_id)
+                    if decision:
+                        best_t = preview_state.find_topic_by_id(decision.selected_topic_id) or preview_state.find_topic_by_number(decision.selected_topic_number)
+                        if best_t:
+                            act_ev = EventFactory.create_topic_status_changed_event(
+                                topic=best_t,
+                                new_status="Ongoing",
+                                turn_id=user_turn_id,
+                                evidence_refs=[user_ev.evidence_id],
+                            )
+                            step_events.append(act_ev)
+                            next_topic = best_t
+                            selected_op_str = "complete_current_topic"
+                            transition = QuestionTransition(
+                                kind="scheduler_switched",
+                                from_topic_title=current_topic.topic_content,
+                                to_topic_title=best_t.topic_content,
+                                user_facing_reason=f"Current topic is completed, transitioning to: '{best_t.topic_content}'",
+                            )
+                    else:
+                        proj_event = EventFactory.create_project_status_changed_event(
+                            project_id=self.project_id,
+                            old_status=state.project_status,
+                            new_status="Completed",
+                            turn_id=user_turn_id,
+                        )
+                        step_events.append(proj_event)
+                        is_interview_finished = True
+                        finish_msg = "All core requirement topics have been successfully completed. The interview is now complete. Thank you for your valuable time and participation!"
+                        next_topic = None
+                        selected_op_str = "complete_current_topic"
+
+            else:
+                # Intent is none or others: schedule next topic from remaining topics in preview_state
+                views = StateView(preview_state, evidence_refs=all_known_evidences).get_scheduling_views(
+                    current_turn_idx=next_turn_idx,
+                    affected_topics=interpretation.affected_existing_topics,
+                )
+                decision = self.scheduler.schedule(preview_state, views, current_topic, user_turn_id)
+                if decision:
+                    best_t = preview_state.find_topic_by_id(decision.selected_topic_id) or preview_state.find_topic_by_number(decision.selected_topic_number)
+                    if best_t:
+                        act_ev = EventFactory.create_topic_status_changed_event(
+                            topic=best_t,
+                            new_status="Ongoing",
+                            turn_id=user_turn_id,
+                            evidence_refs=[user_ev.evidence_id],
+                        )
+                        step_events.append(act_ev)
+                        next_topic = best_t
+                        selected_op_str = "complete_current_topic"
+                        transition = QuestionTransition(
+                            kind="scheduler_switched",
+                            from_topic_title=current_topic.topic_content,
+                            to_topic_title=best_t.topic_content,
+                            user_facing_reason=f"Current topic is completed, transitioning to: '{best_t.topic_content}'",
+                        )
+                else:
+                    proj_event = EventFactory.create_project_status_changed_event(
+                        project_id=self.project_id,
+                        old_status=state.project_status,
+                        new_status="Completed",
+                        turn_id=user_turn_id,
+                    )
+                    step_events.append(proj_event)
+                    is_interview_finished = True
+                    finish_msg = "All core requirement topics have been successfully completed. The interview is now complete. Thank you for your valuable time and participation!"
+                    next_topic = None
+                    selected_op_str = "complete_current_topic"
+
+        elif not intent_decision.needs_confirmation and intent_decision.intent != "none":
+            # Case 1: High-confidence explicit user control on unaccepted topic (stop, refuse, switch, return)
+            if intent_decision.intent == "stop_interview":
+                proj_event = EventFactory.create_project_status_changed_event(
+                    project_id=self.project_id,
+                    old_status=state.project_status,
                     new_status="Completed",
+                    turn_id=user_turn_id,
+                )
+                top_ev = EventFactory.create_topic_status_changed_event(
+                    topic=current_topic,
+                    new_status="UserInterrupted",
                     turn_id=user_turn_id,
                     evidence_refs=[user_ev.evidence_id],
                 )
-                step_events.extend([comp_top_ev, proj_event])
+                step_events.extend([top_ev, proj_event])
                 is_interview_finished = True
                 finish_msg = "The interviewee chose to terminate the interview. Thank you for your participation!"
                 next_topic = None
@@ -705,6 +833,21 @@ class ElicitationPipeline:
                     selected_op_str = "maintain_current_topic"
                     transition = QuestionTransition(kind="maintain")
 
+        elif intent_decision.verification_outcome == "revisions_requested":
+            # AC-09: Revisions requested on current topic summary with no control intent -> maintain current topic and apply revisions
+            next_topic = current_topic
+            selected_op_str = "maintain_current_topic"
+            transition = QuestionTransition(kind="maintain")
+
+        elif intent_decision.verification_outcome == "ambiguous":
+            # AC-10: Ambiguous response to verification summary with no control intent -> maintain current topic and generate clarification
+            next_topic = current_topic
+            selected_op_str = "maintain_current_topic"
+            transition = QuestionTransition(
+                kind="confirm_control",
+                user_facing_reason="Please clarify whether the current topic summary is accurate and complete.",
+            )
+
         elif intent_decision.needs_confirmation:
             # Case 2: Low-confidence / Ambiguous control intent -> maintain current topic and trigger confirmation
             next_topic = current_topic
@@ -766,13 +909,18 @@ class ElicitationPipeline:
 
         if is_interview_finished or next_topic is None:
             StateReducer.apply(state, step_events, known_evidence_ids=known_ev_ids, strict_validation=True)
-            state.current_topic_id = None
 
             # Build unified decision for finish/exit
             unified_dec = UnifiedDecisionRecord(
                 decision_id=decision_id,
                 turn_id=user_turn_id,
-                intent={"type": intent_decision.intent, "confidence": intent_decision.confidence},
+                intent={
+                    "type": intent_decision.intent,
+                    "confidence": intent_decision.confidence,
+                    "verification_outcome": intent_decision.verification_outcome,
+                    "verification_confidence": intent_decision.verification_confidence,
+                    "verification_explanation": intent_decision.verification_explanation,
+                },
                 scheduler=decision.model_dump() if decision else {},
                 strategy={"code": "verify", "target_slot_ids": []},
             )
@@ -837,7 +985,13 @@ class ElicitationPipeline:
         unified_dec = UnifiedDecisionRecord(
             decision_id=decision_id,
             turn_id=user_turn_id,
-            intent={"type": intent_decision.intent, "confidence": intent_decision.confidence},
+            intent={
+                "type": intent_decision.intent,
+                "confidence": intent_decision.confidence,
+                "verification_outcome": intent_decision.verification_outcome,
+                "verification_confidence": intent_decision.verification_confidence,
+                "verification_explanation": intent_decision.verification_explanation,
+            },
             scheduler=decision.model_dump() if decision else {
                 "selected_topic_id": final_active_topic.topic_id,
                 "selected_topic_number": final_active_topic.topic_number,
@@ -891,6 +1045,7 @@ class ElicitationPipeline:
                 "target_slot_ids": target_slot_ids,
                 "intent": intent_decision.intent,
                 "needs_confirmation": intent_decision.needs_confirmation,
+                "verification_outcome": intent_decision.verification_outcome,
                 "operation": selected_op_str,
                 "topic_number": final_active_topic.topic_number,
             },
@@ -938,7 +1093,6 @@ class ElicitationPipeline:
                 finish_events.append(comp_top_ev)
 
             StateReducer.apply(state, finish_events, strict_validation=False)
-            state.current_topic_id = None
 
         # Mandatory Invariant Gate check before writing state.json or final_state.json!
         inv_errors = StateInvariantValidator.validate_all(
