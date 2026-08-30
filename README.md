@@ -223,6 +223,8 @@ $env:LLM_API_KEY="your-api-key"
 
 ### 5.2 CLI Tools
 
+The system provides 6 standard CLI tools supporting end-to-end interaction and offline operations:
+
 #### 1. Initialize Interview (`init_project.py`)
 Prepare an input JSON file, for example `project_input.json`:
 ```json
@@ -278,12 +280,11 @@ The command reuses the persisted answer and original Turn ID. If continuation fa
 > Do not rerun `scripts/step.py --answer ...` for a pending turn. `step.py` uses the normal load path and may append a duplicate Interviewee Turn instead of resuming the recorded one.
 
 #### 6. Offline Deterministic Replay (`replay.py`)
-Replay historical sessions without making live LLM calls:
+Supports deterministic comparison and state progression verification for historical interview sessions without making live LLM API calls:
 
 ```bash
 # Mode 1: Event stream state replay (verifies StateReducer determinism)
 python scripts/replay.py --project-id <PROJECT_ID> --mode state
-```
 
 # Mode 2: Full LLM log replay (verifies end-to-end pipeline determinism)
 python scripts/replay.py --project-id <PROJECT_ID> --mode llm
