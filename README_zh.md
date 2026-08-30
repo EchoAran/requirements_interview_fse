@@ -159,7 +159,7 @@ semi_structured_interview_fse/
 
 | 文件名 | 类型 | 核心作用与规范 |
 |---|---|---|
-| `input.json` | JSON | 原始项目创建参数（项目名称、初始输入文本、创建时间等） |
+| `input.json` | JSON | 原始项目创建参数（项目名称、初始输入文本等） |
 | `state.initial.json` | JSON | Round 0 初始化阶段完成后的基线状态快照 |
 | `state.json` | JSON | 当前最新的项目运行时状态快照（可随时删除并由事件流 100% 确定性重建） |
 | `final_state.json` | JSON | 用户执行 `scripts/finish.py` 后写入的最终不可变状态快照 |

@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
@@ -19,7 +18,6 @@ class SlotRevision(BaseModel):
     old_value: Optional[str] = None
     new_value: Optional[str] = None
     evidence_refs: list[str] = Field(default_factory=list)
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class SlotState(BaseModel):
@@ -85,8 +83,6 @@ class ProjectState(BaseModel):
     dependencies: list[DependencyEdge] = Field(default_factory=list)
     initial_order: list[str] = Field(default_factory=list)
     applied_event_ids: list[str] = Field(default_factory=list)
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def get_all_topics(self) -> list[TopicState]:
         topics: list[TopicState] = []

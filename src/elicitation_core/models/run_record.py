@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 
@@ -22,7 +21,6 @@ class RunError(BaseModel):
     ]
     message: str
     recoverable: bool = True
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class UnifiedDecisionRecord(BaseModel):
@@ -31,7 +29,6 @@ class UnifiedDecisionRecord(BaseModel):
     intent: dict[str, Any] = Field(default_factory=dict)
     scheduler: dict[str, Any] = Field(default_factory=dict)
     strategy: dict[str, Any] = Field(default_factory=dict)
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     @property
     def selected_topic_id(self) -> Optional[str]:

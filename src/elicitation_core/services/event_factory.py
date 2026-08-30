@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from typing import Optional
 from ..models.event import EvidenceRef, StateEvent
 from ..models.state import SlotRevision, SlotState, TopicState
@@ -49,7 +48,6 @@ class EventFactory:
             turn_id=turn_id,
             message_id=message_id,
             content=content,
-            created_at=datetime.now(timezone.utc).isoformat(),
         )
 
     @staticmethod
@@ -60,7 +58,6 @@ class EventFactory:
         turn_id: Optional[str] = None,
         evidence_refs: list[str] = [],
     ) -> StateEvent:
-        now_ts = datetime.now(timezone.utc).isoformat()
         return StateEvent(
             event_id=IdFactory.create_event_id(),
             turn_id=turn_id,
@@ -74,7 +71,6 @@ class EventFactory:
                 "section_id": section_id,
             },
             evidence_refs=list(evidence_refs),
-            created_at=now_ts,
         )
 
     @classmethod
@@ -87,7 +83,6 @@ class EventFactory:
         proposed_operation: Optional[str] = None,
         is_llm_proposed: bool = False,
     ) -> tuple[StateEvent, SlotRevision]:
-        now_ts = datetime.now(timezone.utc).isoformat()
         rev_id = IdFactory.create_revision_id(len(slot.revisions) + 1)
         old_value = slot.value
 
@@ -120,7 +115,6 @@ class EventFactory:
             old_value=old_value,
             new_value=new_value,
             evidence_refs=list(evidence_refs),
-            created_at=now_ts,
         )
 
         before_dict = {
@@ -143,7 +137,6 @@ class EventFactory:
             before=before_dict,
             after=after_dict,
             evidence_refs=list(evidence_refs),
-            created_at=now_ts,
         )
 
         return event, revision
@@ -155,7 +148,6 @@ class EventFactory:
         turn_id: Optional[str] = None,
         evidence_refs: list[str] = [],
     ) -> StateEvent:
-        now_ts = datetime.now(timezone.utc).isoformat()
         return StateEvent(
             event_id=IdFactory.create_event_id(),
             turn_id=turn_id,
@@ -165,7 +157,6 @@ class EventFactory:
             before={"topic_status": topic.topic_status},
             after={"topic_status": new_status},
             evidence_refs=list(evidence_refs),
-            created_at=now_ts,
         )
 
     @staticmethod
@@ -175,7 +166,6 @@ class EventFactory:
         turn_id: Optional[str] = None,
         evidence_refs: list[str] = [],
     ) -> StateEvent:
-        now_ts = datetime.now(timezone.utc).isoformat()
         return StateEvent(
             event_id=IdFactory.create_event_id(),
             turn_id=turn_id,
@@ -185,7 +175,6 @@ class EventFactory:
             before={},
             after={"topic": topic.model_dump(), "section_id": section_id},
             evidence_refs=list(evidence_refs),
-            created_at=now_ts,
         )
 
     @staticmethod
@@ -195,7 +184,6 @@ class EventFactory:
         new_status: str,
         turn_id: Optional[str] = None,
     ) -> StateEvent:
-        now_ts = datetime.now(timezone.utc).isoformat()
         return StateEvent(
             event_id=IdFactory.create_event_id(),
             turn_id=turn_id,
@@ -205,7 +193,6 @@ class EventFactory:
             before={"project_status": old_status},
             after={"project_status": new_status},
             evidence_refs=[],
-            created_at=now_ts,
         )
 
     @staticmethod
@@ -215,7 +202,6 @@ class EventFactory:
         new_turn_index: int,
         turn_id: str,
     ) -> StateEvent:
-        now_ts = datetime.now(timezone.utc).isoformat()
         return StateEvent(
             event_id=IdFactory.create_event_id(),
             turn_id=turn_id,
@@ -225,7 +211,6 @@ class EventFactory:
             before={"turn_index": old_turn_index},
             after={"turn_index": new_turn_index},
             evidence_refs=[],
-            created_at=now_ts,
         )
 
     @staticmethod
@@ -235,7 +220,6 @@ class EventFactory:
         turn_id: Optional[str] = None,
         evidence_refs: list[str] = [],
     ) -> StateEvent:
-        now_ts = datetime.now(timezone.utc).isoformat()
         return StateEvent(
             event_id=IdFactory.create_event_id(),
             turn_id=turn_id,
@@ -248,7 +232,6 @@ class EventFactory:
                 "target": target_topic_number,
             },
             evidence_refs=list(evidence_refs),
-            created_at=now_ts,
         )
 
     @staticmethod
@@ -258,7 +241,6 @@ class EventFactory:
         turn_id: Optional[str] = None,
         evidence_refs: list[str] = [],
     ) -> StateEvent:
-        now_ts = datetime.now(timezone.utc).isoformat()
         return StateEvent(
             event_id=IdFactory.create_event_id(),
             turn_id=turn_id,
@@ -271,5 +253,4 @@ class EventFactory:
             },
             after={},
             evidence_refs=list(evidence_refs),
-            created_at=now_ts,
         )

@@ -159,7 +159,7 @@ Every interview session stores all state snapshots, events, and audit logs insid
 
 | File | Type | Format & Purpose |
 |---|---|---|
-| `input.json` | JSON | Project creation metadata (project name, initial requirements, timestamp) |
+| `input.json` | JSON | Project creation metadata (project name, initial requirements) |
 | `state.initial.json` | JSON | Baseline state snapshot immediately following Round 0 initialization |
 | `state.json` | JSON | Latest live project state snapshot (can be deleted and 100% reconstructed from events) |
 | `final_state.json` | JSON | Immutable final snapshot written when the user runs `scripts/finish.py` |

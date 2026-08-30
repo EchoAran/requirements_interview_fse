@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from typing import Any, Optional
 from pydantic import BaseModel, Field
 
@@ -19,4 +18,3 @@ class LLMCallRecord(BaseModel):
     status: str = "ok"  # "ok" | "success" | "error"
     error_message: Optional[str] = None
     metadata: dict[str, Any] = Field(default_factory=dict)
-    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())

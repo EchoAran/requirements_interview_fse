@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 
@@ -9,7 +8,6 @@ class EvidenceRef(BaseModel):
     turn_id: Optional[str] = None
     message_id: Optional[str] = None
     content: str
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class StateEvent(BaseModel):
@@ -30,4 +28,3 @@ class StateEvent(BaseModel):
     before: dict[str, Any] = Field(default_factory=dict)
     after: dict[str, Any] = Field(default_factory=dict)
     evidence_refs: list[str] = Field(default_factory=list)
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
