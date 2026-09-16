@@ -412,6 +412,21 @@ class ElicitationPipeline:
             )
 
         current_topic = state.get_current_topic()
+        if state.turn_index >= self.config.runtime.max_turns:
+            return StepResult(
+                project_id=self.project_id,
+                turn_index=state.turn_index,
+                current_topic_id=current_topic.topic_id if current_topic else None,
+                current_topic_number=current_topic.topic_number if current_topic else None,
+                current_topic_content=current_topic.topic_content if current_topic else None,
+                next_question="",
+                termination_reason="max_turns_reached",
+                termination_message=(
+                    f"Maximum interview turn limit ({self.config.runtime.max_turns}) reached. "
+                    "Execution stopped with the project left incomplete."
+                ),
+            )
+
         if not current_topic:
             all_t = state.get_all_topics()
             if not all_t:
@@ -1038,6 +1053,40 @@ class ElicitationPipeline:
             },
             strategy={"code": plan.strategy, "target_slot_ids": target_slot_ids},
         )
+
+        if state.turn_index >= self.config.runtime.max_turns:
+            all_accumulated_events = self.store.load_state_events(self.project_id) + step_events
+            all_decisions = self.store.load_decisions(self.project_id) + [unified_dec]
+            inv_errors = StateInvariantValidator.validate_all(
+                state=state,
+                known_evidence_ids=known_ev_ids,
+                events=all_accumulated_events,
+                decisions=all_decisions,
+            )
+            if inv_errors:
+                raise StateInvariantError(rule_id=0, message="; ".join(inv_errors))
+
+            self.store.append_evidence(self.project_id, user_ev)
+            self.store.append_state_events(self.project_id, step_events)
+            self.store.append_decision(self.project_id, unified_dec)
+            self.store.save_state(state)
+
+            return StepResult(
+                project_id=self.project_id,
+                turn_index=state.turn_index,
+                current_topic_id=final_active_topic.topic_id,
+                current_topic_number=final_active_topic.topic_number,
+                current_topic_content=final_active_topic.topic_content,
+                next_question="",
+                termination_reason="max_turns_reached",
+                termination_message=(
+                    f"Maximum interview turn limit ({self.config.runtime.max_turns}) reached. "
+                    "Execution stopped with the project left incomplete."
+                ),
+                selected_strategy=plan.strategy,
+                selected_operation=selected_op_str,
+                state_events=step_events,
+            )
 
         gen_input = self.context_builder.build(
             state=state,

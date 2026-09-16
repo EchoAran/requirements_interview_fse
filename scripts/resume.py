@@ -74,6 +74,10 @@ async def main():
             if result.is_finished:
                 print("Status          : FINISHED")
                 print(f"Finish Message  : {result.finish_message}")
+            elif result.termination_reason:
+                print("Status          : TERMINATED (INCOMPLETE)")
+                print(f"Termination Reason: {result.termination_reason}")
+                print(f"Termination Message: {result.termination_message}")
             else:
                 print(f"Current Topic   : [{result.current_topic_number}] {result.current_topic_content}")
                 print("\n[Interviewer Next Question]:")

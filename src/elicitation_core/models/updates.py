@@ -33,6 +33,8 @@ class StepResult(BaseModel):
     next_question: str
     is_finished: bool = False
     finish_message: Optional[str] = None
+    termination_reason: Optional[Literal["max_turns_reached"]] = None
+    termination_message: Optional[str] = None
     selected_strategy: Optional[str] = None
     selected_operation: Optional[str] = None
     state_events: list[StateEvent] = Field(default_factory=list)

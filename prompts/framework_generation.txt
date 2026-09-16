@@ -7,10 +7,10 @@
 
 # DECOMPOSITION STEPS:
 ## Step 1: Analyze [initial_requirements] to extract core business goals, target user roles, system boundaries, and primary operational constraints.
-## Step 2: Formulate 2 to 4 structured Sections (Section) representing high-level functional modules or architectural concerns:
+## Step 2: Formulate 6 to 9 structured Sections (Section) representing high-level functional modules or architectural concerns:
   - Sequence sections in natural interview priority and logical flow, numbered sequentially as "section-1", "section-2", etc.
   - section_content: Concisely summarize the core domain module or focus area (e.g., "Core Workflow & Booking Lifecycle").
-## Step 3: For each Section, decompose 2 to 4 concrete Topics (Topic):
+## Step 3: For each Section, decompose 3 to 6 concrete Topics (Topic):
   - Focus each topic on a specific business scenario, feature capability, or key quality constraint, numbered sequentially as "topic-1-1", "topic-1-2", etc.
   - topic_content: Clearly define the specific business aspects to be explored during the interview (e.g., "User Reservation Rules & Eligibility Validation").
 ## Step 4: For each Topic, design 2 to 4 essential Information Slots (Slot):
@@ -46,4 +46,3 @@
     ]
   }
 ]
-

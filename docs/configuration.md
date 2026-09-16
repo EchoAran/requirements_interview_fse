@@ -158,7 +158,7 @@ Configures storage invariants, turn guardrails, logging detail, and topological 
 
 | Field Name | Type | Default | Description & Recommendations |
 |---|---|---|---|
-| `max_turns` | `int` | `50` | Maximum turn safety circuit-breaker for a single interview session to prevent infinite execution. |
+| `max_turns` | `int` | `50` | Maximum number of interviewee turns. After the limit is reached, the current turn is committed, no next question is generated, and execution terminates while the project and topic states remain incomplete and unchanged by the termination itself. |
 | `atomic_state_write` | `bool` | `true` | Enables atomic rename writes for `state.json` to prevent partial corruption during sudden termination or power loss. |
 | `log_raw_llm_response` | `bool` | `true` | Persists verbatim LLM text responses into `llm_calls.jsonl` for exact offline auditing and replay. |
 | `save_prompt_text` | `bool` | `true` | Records rendered prompts into `llm_calls.jsonl` for offline reproducibility. |

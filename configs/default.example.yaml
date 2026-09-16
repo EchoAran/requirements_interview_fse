@@ -130,7 +130,7 @@ context_budget:
 # 6. Runtime System Configuration (Runtime)
 # ------------------------------------------------------------------------------
 runtime:
-  # Maximum safety turn limit for an interview session to prevent infinite conversational loops
+  # Stop execution without completing the project after this many interviewee turns
   max_turns: 50
 
   # Whether to use atomic file replacement when saving state.json (prevents corruption on sudden crash)
