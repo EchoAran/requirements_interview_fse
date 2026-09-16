@@ -121,8 +121,6 @@ Governs high-level strategy selection (`explore` / `fill_gap` / `deepen` / `reso
 | Field Name | Type | Default | Valid Range | Description & Recommendations |
 |---|---|---|---|---|
 | `max_target_slots` | `int` | `1` | >= `1` | Maximum number of target slots to focus on within a single interview turn. Keeping this at `1` prevents overwhelming the interviewee with compound questions. |
-| `short_value_char_threshold` | `int` | `12` | >= `0` | **Shallow Answer Threshold**. If a slot value character length is below this number, the content is considered superficial, prompting the system toward the `deepen` strategy. |
-| `emergence_deepen_turn_window` | `int` | `2` | >= `1` | Protection window (in turns) for newly created emergent topics to receive dedicated consecutive elaboration. |
 
 ---
 
@@ -177,7 +175,7 @@ Configures storage invariants, turn guardrails, logging detail, and topological 
 - Keep `log_raw_llm_response: true` to easily inspect JSON extraction failures.
 
 ### Scenario B: Production Requirements Elicitation (High Precision & Deep Exploration)
-- Set `strategy.short_value_char_threshold: 20` to aggressively detect shallow answers and prompt deeper clarification;
+- Deepen strategy is deterministically driven by uncertain slots and single-evidence emergent slots, with choice-based clarification upon stalled progress;
 - Increase `scheduler.weights.unresolved_gap` and `scheduler.weights.conflict_signal` to `0.25` to prioritize unaddressed requirements and conflicting statements;
 - Use frontier reasoning models (e.g. `gpt-4o`).
 

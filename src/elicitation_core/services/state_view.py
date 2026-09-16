@@ -106,30 +106,89 @@ class StateView:
         ]
         return len(interview_evs)
 
-    def needs_deepening(self, topic_id_or_number: str) -> bool:
-        """Determines if the topic needs deepening via deterministic heuristic signals."""
+    def slot_interview_evidence_count(self, slot: SlotState) -> int:
+        """Counts only genuine interview evidence references for a given slot.
+
+        Falls back to raw evidence count if no evidence source mapping is provided.
+        """
+        slot_evs = set(slot.evidence_refs)
+        for rev in slot.revisions:
+            slot_evs.update(rev.evidence_refs)
+        if not slot_evs:
+            return 0
+        if not self._evidence_source_map:
+            return len(slot_evs)
+        return sum(
+            1 for eid in slot_evs
+            if self._evidence_source_map.get(eid) == "interview_turn"
+        )
+
+    def get_deepening_target_slots(
+        self,
+        topic_id_or_number: str,
+        deferred_slot_ids: Optional[set[str]] = None,
+    ) -> list[tuple[SlotState, str]]:
+        """Identifies concrete candidate slots that require deepening, ordered by priority.
+
+        Priority order:
+        1. Required slots marked uncertain (reason: 'uncertain_value').
+        2. Optional slots marked uncertain (reason: 'uncertain_value').
+        3. Dynamically added slots with a populated value and at most one interview evidence (reason: 'added_slot_needs_clarification').
+
+        Slots in deferred_slot_ids are excluded as their deepening has already been addressed or explicitly deferred.
+        """
+        topic = self.get_topic(topic_id_or_number)
+        if not topic:
+            return []
+
+        deferred = deferred_slot_ids or set()
+        candidates: list[tuple[SlotState, str]] = []
+
+        for s in topic.slots:
+            is_deferred = s.slot_id in deferred or bool(getattr(s, "deferred", False))
+            if not is_deferred and s.state == "uncertain" and s.is_required:
+                candidates.append((s, "uncertain_value"))
+
+        for s in topic.slots:
+            is_deferred = s.slot_id in deferred or bool(getattr(s, "deferred", False))
+            if not is_deferred and s.state == "uncertain" and not s.is_required:
+                candidates.append((s, "uncertain_value"))
+
+        for s in topic.slots:
+            is_deferred = s.slot_id in deferred or bool(getattr(s, "deferred", False))
+            if not is_deferred and s.origin == "added" and s.state != "uncertain":
+                if s.value is not None and str(s.value).strip() != "":
+                    ev_count = self.slot_interview_evidence_count(s)
+                    if ev_count <= 1:
+                        candidates.append((s, "added_slot_needs_clarification"))
+
+        return candidates
+
+    def needs_deepening(
+        self,
+        topic_id_or_number: str,
+        deferred_slot_ids: Optional[set[str]] = None,
+    ) -> bool:
+        """Determines if the topic contains any slot requiring deepening."""
+        return len(self.get_deepening_target_slots(topic_id_or_number, deferred_slot_ids=deferred_slot_ids)) > 0
+
+    def is_ready_for_verification(
+        self,
+        topic_id_or_number: str,
+        deferred_slot_ids: Optional[set[str]] = None,
+    ) -> bool:
+        """Determines if a topic has fulfilled prerequisites for verification without pending gaps or conflicts."""
         topic = self.get_topic(topic_id_or_number)
         if not topic:
             return False
-
-        # Signal 1: Contains uncertain slots
-        if any(s.state == "uncertain" for s in topic.slots):
-            return True
-
-        # Signal 2: Contains filled emergent slots with only 1 evidence
-        for s in topic.slots:
-            if s.origin == "added" and s.value is not None and str(s.value).strip() != "":
-                if len(s.evidence_refs) <= 1:
-                    return True
-
-        # Signal 3: Filled slot value is very short (e.g. <= 4 chars)
-        for s in topic.slots:
-            if s.value is not None:
-                val_str = str(s.value).strip()
-                if 0 < len(val_str) <= 4:
-                    return True
-
-        return False
+        if len(self.get_empty_required_slots(topic_id_or_number)) > 0:
+            return False
+        if self.has_conflict(topic_id_or_number):
+            return False
+        if self.needs_deepening(topic_id_or_number, deferred_slot_ids=deferred_slot_ids):
+            return False
+        filled = self.get_filled_slots(topic_id_or_number)
+        return len(filled) > 0 or self.interview_evidence_count(topic_id_or_number) > 0
 
     def get_topic_completion(self, topic_id_or_number: str) -> float:
         slots = self.get_topic_slots(topic_id_or_number)
@@ -327,6 +386,10 @@ class StateView:
             len([s for s in t.slots if s.value is not None and str(s.value).strip() != ""])
             for t in all_topics
         )
+        ready_topics = [
+            t.topic_id for t in all_topics
+            if t.topic_status not in ("Completed", "UserInterrupted") and self.is_ready_for_verification(t.topic_id)
+        ]
         return {
             "project_id": self._state.project_id,
             "project_name": self._state.project_name,
@@ -338,4 +401,6 @@ class StateView:
             "total_slots": total_slots,
             "filled_slots": filled_slots,
             "overall_slot_coverage": (filled_slots / total_slots) if total_slots > 0 else 0.0,
+            "ready_for_verification_topics": ready_topics,
+            "ready_for_verification_count": len(ready_topics),
         }

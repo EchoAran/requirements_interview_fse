@@ -90,12 +90,6 @@ strategy:
   # Maximum target slots to focus on within a single turn (1 recommended to prevent cognitive overload)
   max_target_slots: 1
 
-  # Short value character threshold (values below this length are considered shallow, prompting 'deepen')
-  short_value_char_threshold: 12
-
-  # Protection turn window for newly emergent topics to allow consecutive deep exploration
-  emergence_deepen_turn_window: 2
-
 
 # ------------------------------------------------------------------------------
 # 5. Context Budget & Token Management Configuration (Context Budget)

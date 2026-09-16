@@ -90,7 +90,7 @@ class ElicitationPipeline:
         self.scheduler = Scheduler(weights=self.config.runtime.scheduler.weights)
 
         # Strategy selection and follow-up question generation components
-        self.strategy_selector = StrategySelector()
+        self.strategy_selector = StrategySelector(config=self.config.strategy)
         self.context_builder = QuestionContextBuilder()
         self.question_generator = QuestionGenerator(
             self._llm_client,
@@ -98,6 +98,7 @@ class ElicitationPipeline:
             prompts_dir=prompts_dir,
             context_budget=self.config.runtime.context_budget,
         )
+        self._deferred_slot_ids: Set[str] = set()
 
     @property
     def llm_client(self) -> LLMClient:
@@ -156,6 +157,18 @@ class ElicitationPipeline:
         pipeline._init_requirements = initial_requirements
         return pipeline
 
+    def _restore_runtime_state(self) -> None:
+        """Restores in-memory runtime session state strictly from authoritative persistent state."""
+        try:
+            state = self.store.load_state(self.project_id)
+            if state:
+                for top in state.get_all_topics():
+                    for s in top.slots:
+                        if getattr(s, "deferred", False):
+                            self._deferred_slot_ids.add(s.slot_id)
+        except Exception:
+            pass
+
     @classmethod
     def load(
         cls,
@@ -167,7 +180,9 @@ class ElicitationPipeline:
         store = ProjectStore(base_runs_dir=base_runs_dir or cfg.get_runs_path())
         if not store.project_exists(project_id):
             raise FileNotFoundError(f"Project not found: {project_id}")
-        return cls(project_id=project_id, config=cfg, store=store)
+        pipeline = cls(project_id=project_id, config=cfg, store=store)
+        pipeline._restore_runtime_state()
+        return pipeline
 
     @classmethod
     def resume(
@@ -231,6 +246,7 @@ class ElicitationPipeline:
         pipeline.pending_user_turn = pending_user_turn
         pipeline._init_project_name = state.project_name
         pipeline._init_requirements = state.initial_requirements
+        pipeline._restore_runtime_state()
         return pipeline
 
     def _get_known_evidence_ids(self) -> Set[str]:
@@ -542,9 +558,20 @@ class ElicitationPipeline:
         topic_catalog = view.get_topic_catalog()
         project_digest = view.get_project_digest()
 
-        # Extract previous interviewer turn strategy
+        # Extract previous interviewer turn strategy and deepen metadata
         interviewer_turns = [t for t in all_turns if t.role == "Interviewer"]
-        previous_strategy = interviewer_turns[-1].metadata.get("strategy") if interviewer_turns else None
+        last_interviewer_turn = interviewer_turns[-1] if interviewer_turns else None
+        previous_strategy = last_interviewer_turn.metadata.get("strategy") if last_interviewer_turn else None
+        previous_deepen_target_ids = (
+            last_interviewer_turn.metadata.get("target_slot_ids", [])
+            if last_interviewer_turn and previous_strategy == "deepen"
+            else []
+        )
+        previous_deepening_reason = (
+            last_interviewer_turn.metadata.get("deepening_reason")
+            if last_interviewer_turn and previous_strategy == "deepen"
+            else None
+        )
 
         # Detect explicit user control intentions and verification outcome
         intent_decision = await self.intent_controller.detect(
@@ -616,6 +643,61 @@ class ElicitationPipeline:
                 StateReducer.apply(preview_state, structure_events, known_evidence_ids=known_ev_ids, strict_validation=False)
             except Exception:
                 pass
+
+        # Maintain deferred slot ID registry based on authoritative slot events in this turn
+        for e in slot_events:
+            if e.event_type == "slot_value_changed":
+                if e.after.get("deferred") is True:
+                    self._deferred_slot_ids.add(e.entity_id)
+                else:
+                    self._deferred_slot_ids.discard(e.entity_id)
+
+        # Evaluate progress on previous deepen target
+        forced_deepen_target: Optional[tuple[str, str]] = None
+        if previous_strategy == "deepen" and previous_deepen_target_ids:
+            target_slot_id = previous_deepen_target_ids[0]
+            target_slot_events = [
+                e for e in slot_events
+                if e.event_type == "slot_value_changed" and e.entity_id == target_slot_id
+            ]
+
+            # Detect explicit structured deferral
+            has_structured_defer = any(
+                e.after.get("deferred") is True
+                or e.after.get("revision", {}).get("operation") == "defer_uncertain"
+                for e in target_slot_events
+            )
+
+            if has_structured_defer:
+                # Outcome 1: Explicit structured deferral
+                self._deferred_slot_ids.add(target_slot_id)
+            elif not target_slot_events:
+                # Outcome 3: No target slot event emitted -> prompt interviewee to clarify or explicitly defer
+                forced_deepen_target = (target_slot_id, "clarify_or_defer")
+            else:
+                # Outcome 2: Candidate value updated or marked uncertain without deferral
+                self._deferred_slot_ids.discard(target_slot_id)
+                made_effective_progress = False
+                for te in target_slot_events:
+                    val_changed = te.before.get("value") != te.after.get("value")
+                    state_changed = te.before.get("state") != te.after.get("state")
+                    ev_added = len(te.evidence_refs) > 0
+                    if previous_deepening_reason == "uncertain_value":
+                        # For previously uncertain slot, effective progress requires value change or state transition out of uncertain
+                        if val_changed or (state_changed and te.after.get("state") != "uncertain"):
+                            made_effective_progress = True
+                            break
+                    elif previous_deepening_reason == "added_slot_needs_clarification":
+                        if val_changed or state_changed or ev_added:
+                            made_effective_progress = True
+                            break
+                    else:
+                        if val_changed or state_changed or ev_added:
+                            made_effective_progress = True
+                            break
+
+                if not made_effective_progress:
+                    forced_deepen_target = (target_slot_id, "clarify_or_defer")
 
         # Resolve scheduling decisions via user intent override or multi-factor dynamic scheduler
         next_topic: Optional[TopicState] = current_topic
@@ -907,8 +989,9 @@ class ElicitationPipeline:
             )
 
         else:
-            # Case 3: Regular content answer -> Multi-factor Scheduler
-            views = StateView(preview_state, evidence_refs=all_known_evidences).get_scheduling_views(
+            # Case 3: Regular content answer -> Global dynamic scheduling with topic closure protection
+            preview_view = StateView(preview_state, evidence_refs=all_known_evidences)
+            views = preview_view.get_scheduling_views(
                 current_turn_idx=next_turn_idx,
                 affected_topics=interpretation.affected_existing_topics,
             )
@@ -918,27 +1001,36 @@ class ElicitationPipeline:
                 best_t = preview_state.find_topic_by_id(decision.selected_topic_id) or preview_state.find_topic_by_number(decision.selected_topic_number)
                 if best_t:
                     if best_t.topic_id != current_topic.topic_id:
-                        inter_ev = EventFactory.create_topic_status_changed_event(
-                            topic=current_topic,
-                            new_status="SystemInterrupted",
-                            turn_id=user_turn_id,
-                            evidence_refs=[user_ev.evidence_id],
-                        )
-                        act_ev = EventFactory.create_topic_status_changed_event(
-                            topic=best_t,
-                            new_status="Ongoing",
-                            turn_id=user_turn_id,
-                            evidence_refs=[user_ev.evidence_id],
-                        )
-                        step_events.extend([inter_ev, act_ev])
-                        next_topic = best_t
-                        selected_op_str = "switch_another_topic"
-                        transition = QuestionTransition(
-                            kind="scheduler_switched",
-                            from_topic_title=current_topic.topic_content,
-                            to_topic_title=best_t.topic_content,
-                            user_facing_reason=f"Current topic is sufficiently covered, transitioning to: '{best_t.topic_content}'",
-                        )
+                        has_empty_req = len(preview_view.get_empty_required_slots(current_topic.topic_id)) > 0
+                        has_conflicts = preview_view.has_conflict(current_topic.topic_id)
+
+                        # Maintain topic closure protection: do not interrupt current topic if all required slots are filled and conflict-free
+                        if not has_empty_req and not has_conflicts:
+                            next_topic = current_topic
+                            selected_op_str = "maintain_current_topic"
+                            transition = QuestionTransition(kind="maintain")
+                        else:
+                            inter_ev = EventFactory.create_topic_status_changed_event(
+                                topic=current_topic,
+                                new_status="SystemInterrupted",
+                                turn_id=user_turn_id,
+                                evidence_refs=[user_ev.evidence_id],
+                            )
+                            act_ev = EventFactory.create_topic_status_changed_event(
+                                topic=best_t,
+                                new_status="Ongoing",
+                                turn_id=user_turn_id,
+                                evidence_refs=[user_ev.evidence_id],
+                            )
+                            step_events.extend([inter_ev, act_ev])
+                            next_topic = best_t
+                            selected_op_str = "switch_another_topic"
+                            transition = QuestionTransition(
+                                kind="scheduler_switched",
+                                from_topic_title=current_topic.topic_content,
+                                to_topic_title=best_t.topic_content,
+                                user_facing_reason=f"Current topic is sufficiently covered, transitioning to: '{best_t.topic_content}'",
+                            )
                     else:
                         next_topic = current_topic
                         selected_op_str = "maintain_current_topic"
@@ -1032,6 +1124,8 @@ class ElicitationPipeline:
             scheduler_decision=decision,
             transition_from_topic_id=current_topic.topic_id if final_active_topic.topic_id != current_topic.topic_id else None,
             evidence_refs=all_known_evidences,
+            deferred_slot_ids=self._deferred_slot_ids,
+            forced_deepen_target=forced_deepen_target if final_active_topic.topic_id == current_topic.topic_id else None,
         )
 
         # Build unified decision record for this turn
@@ -1051,7 +1145,11 @@ class ElicitationPipeline:
                 "selected_topic_number": final_active_topic.topic_number,
                 "candidate_scores": [],
             },
-            strategy={"code": plan.strategy, "target_slot_ids": target_slot_ids},
+            strategy={
+                "code": plan.strategy,
+                "target_slot_ids": target_slot_ids,
+                "deepening_reason": plan.deepening_reason,
+            },
         )
 
         if state.turn_index >= self.config.runtime.max_turns:
@@ -1131,11 +1229,13 @@ class ElicitationPipeline:
                 "strategy": strat_code,
                 "target_topic_id": final_active_topic.topic_id,
                 "target_slot_ids": target_slot_ids,
+                "deepening_reason": plan.deepening_reason,
                 "intent": intent_decision.intent,
                 "needs_confirmation": intent_decision.needs_confirmation,
                 "verification_outcome": intent_decision.verification_outcome,
                 "operation": selected_op_str,
                 "topic_number": final_active_topic.topic_number,
+                "deferred_slot_ids": list(self._deferred_slot_ids),
             },
         )
         self.store.append_turn(self.project_id, bot_turn)

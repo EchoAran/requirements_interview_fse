@@ -85,8 +85,34 @@ class QuestionGenerator:
         elif strat == "deepen":
             if tc and tc.target_slots:
                 target_slot = tc.target_slots[0]
-                val_repr = f" (Current known value: {target_slot.current_value})" if target_slot.current_value else ""
-                target_desc = f"Probe deeper into concrete use scenarios, refined constraints, or operational boundaries for known item '{target_slot.semantic_key}'{val_repr}."
+                val_repr = target_slot.current_value or "[Not provided]"
+                reason = target_slot.deepening_reason or plan.deepening_reason or "uncertain_value"
+                if reason == "uncertain_value":
+                    reason_text = "The recorded value is tentative or subject to confirmation. Inquire to clarify the final rule or confirm that it remains pending."
+                elif reason == "added_slot_needs_clarification":
+                    reason_text = "This item was newly introduced in a single turn. Clarify its concrete applicable conditions, scope, or provide concise confirmation."
+                elif reason == "clarify_or_defer":
+                    reason_text = "The previous inquiry did not resolve this specific gap. Explicitly ask the interviewee whether they want to supply this missing detail now or record it as undecided / tentative for now."
+                else:
+                    reason_text = "Probe deeper into concrete operational boundaries or conditions for this item."
+
+                recent_qs = [
+                    t.message_content
+                    for t in input_data.recent_turns
+                    if t.role == "Interviewer" and t.message_content
+                ][-3:]
+
+                lines = [
+                    f"Target Item: '{target_slot.semantic_key}'",
+                    f"Current Recorded Value: {val_repr}",
+                    f"Clarification Reason: {reason_text}",
+                ]
+                if recent_qs:
+                    lines.append("Recent questions asked (DO NOT repeat the same boundaries, rules, or questions):")
+                    for rq in recent_qs:
+                        lines.append(f"  - {rq}")
+                target_desc = "\n".join(lines)
+
                 if target_slot.evidence_snippets:
                     evidence_desc = "\n".join(f'- "{snip.content}"' for snip in target_slot.evidence_snippets)
             else:
@@ -109,12 +135,24 @@ class QuestionGenerator:
                 target_desc = "Objectively request the interviewee to clarify conflicting statements recorded under the active topic."
 
         elif strat == "verify":
-            if tc and tc.verify_facts:
-                lines = ["Synthesize and verify core confirmed requirement facts under the active topic:"]
-                for f in tc.verify_facts:
-                    lines.append(f"  - {f['key']}: {f['value']}")
+            confirmed = tc.verify_facts if tc else []
+            uncertain = tc.uncertain_facts if tc else []
+            if confirmed or uncertain:
+                lines = ["Synthesize and verify requirements under the active topic:"]
+                if confirmed:
+                    lines.append("Confirmed requirement points:")
+                    for f in confirmed:
+                        lines.append(f"  - {f['key']}: {f['value']}")
+                if uncertain:
+                    lines.append("Pending / tentative items (to be acknowledged as pending):")
+                    for f in uncertain:
+                        lines.append(f"  - {f['key']}: {f['value']} (Tentative/Pending confirmation)")
+                lines.append(
+                    "Ask the interviewee to confirm if this summary is complete and accurate, "
+                    "or if any revisions or additions are needed before moving forward."
+                )
                 target_desc = "\n".join(lines)
-                evidence_desc = "(The above facts have been supported by verified evidence in preceding turns)"
+                evidence_desc = "(The above points are synthesized from confirmed interview statements and recognized pending items)"
             else:
                 target_desc = "Briefly summarize key requirements under the active topic and ask the interviewee if anything is missing or needs revision."
 

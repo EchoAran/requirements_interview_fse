@@ -144,20 +144,30 @@ class IntentController:
         # Process verification outcome: strictly enforce required verification fields on verify strategy
         if previous_question_strategy == "verify":
             if validated.verification_outcome is None or validated.verification_outcome == "not_applicable":
-                raise self._emit_output_error(
-                    f"When previous question strategy is 'verify', LLM must output verification_outcome in ['accepted', 'revisions_requested', 'ambiguous'], got '{validated.verification_outcome}'",
-                    raw_response=json.dumps(raw_data, ensure_ascii=False),
-                    turn_id=effective_turn_id,
-                )
-            if validated.verification_confidence is None:
-                raise self._emit_output_error(
-                    "When previous question strategy is 'verify', LLM must output verification_confidence",
-                    raw_response=json.dumps(raw_data, ensure_ascii=False),
-                    turn_id=effective_turn_id,
-                )
-            verification_outcome = validated.verification_outcome
-            verification_confidence = max(0.0, min(1.0, validated.verification_confidence))
-            verification_explanation = validated.verification_explanation
+                if validated.intent == "stop_interview":
+                    verification_outcome = "accepted"
+                    verification_confidence = max(0.0, min(1.0, raw_confidence))
+                    verification_explanation = explanation or "Concluded interview during topic verification"
+                elif validated.intent == "refuse_current_topic":
+                    verification_outcome = "ambiguous"
+                    verification_confidence = max(0.0, min(1.0, raw_confidence))
+                    verification_explanation = explanation or "Refused current topic during topic verification"
+                else:
+                    raise self._emit_output_error(
+                        f"When previous question strategy is 'verify', LLM must output verification_outcome in ['accepted', 'revisions_requested', 'ambiguous'], got '{validated.verification_outcome}'",
+                        raw_response=json.dumps(raw_data, ensure_ascii=False),
+                        turn_id=effective_turn_id,
+                    )
+            else:
+                if validated.verification_confidence is None:
+                    raise self._emit_output_error(
+                        "When previous question strategy is 'verify', LLM must output verification_confidence",
+                        raw_response=json.dumps(raw_data, ensure_ascii=False),
+                        turn_id=effective_turn_id,
+                    )
+                verification_outcome = validated.verification_outcome
+                verification_confidence = max(0.0, min(1.0, validated.verification_confidence))
+                verification_explanation = validated.verification_explanation
         else:
             verification_outcome = "not_applicable"
             verification_confidence = 0.0

@@ -140,32 +140,16 @@ class QuestionContextBuilder:
             return TargetContext(target_slots=target_slots, target_relations=target_relations)
 
         if strat == "deepen":
-            target_slot: Optional[SlotState] = None
-            if plan.target_slot_ids:
-                requested_id = plan.target_slot_ids[0]
-                target_slot = target_topic.find_slot(requested_id)
-                if not target_slot:
-                    raise ValueError(
-                        f"Target slot_id '{requested_id}' not found in topic '{target_topic.topic_id}' for deepen."
-                    )
-            else:
-                # Deterministically select first filled or uncertain slot that has evidence
-                ev_id_set = {e.evidence_id for e in evidences}
-                for s in target_topic.slots:
-                    if (s.state in ("uncertain", "filled") or (s.value is not None and str(s.value).strip() != "")) and any(
-                        eid in ev_id_set for eid in s.evidence_refs
-                    ):
-                        target_slot = s
-                        break
-                if not target_slot:
-                    for s in target_topic.slots:
-                        if s.state in ("uncertain", "filled") or (s.value is not None and str(s.value).strip() != ""):
-                            target_slot = s
-                            break
-                if not target_slot:
-                    raise ValueError(
-                        f"No filled or uncertain slot available in topic '{target_topic.topic_id}' for deepen strategy."
-                    )
+            if not plan.target_slot_ids:
+                raise ValueError(
+                    f"QuestionPlan for strategy 'deepen' on topic '{target_topic.topic_id}' must specify non-empty target_slot_ids."
+                )
+            requested_id = plan.target_slot_ids[0]
+            target_slot = target_topic.find_slot(requested_id)
+            if not target_slot:
+                raise ValueError(
+                    f"Target slot_id '{requested_id}' not found in topic '{target_topic.topic_id}' for deepen."
+                )
 
             snippets = self._extract_evidence_snippets(target_slot.evidence_refs, evidences, max_count=2)
             target_slots = [
@@ -176,6 +160,7 @@ class QuestionContextBuilder:
                     state=target_slot.state,
                     is_required=target_slot.is_required,
                     evidence_snippets=snippets,
+                    deepening_reason=plan.deepening_reason,
                 )
             ]
             return TargetContext(target_slots=target_slots, target_relations=target_relations)
@@ -269,16 +254,22 @@ class QuestionContextBuilder:
             )
 
         if strat == "verify":
-            ev_id_set = {e.evidence_id for e in evidences}
-            verify_facts = [
-                {"key": s.key, "value": s.value}
-                for s in target_topic.slots
-                if s.state == "filled"
-                and s.value is not None
-                and str(s.value).strip() != ""
-                and any(eid in ev_id_set for eid in s.evidence_refs)
-            ]
-            return TargetContext(verify_facts=verify_facts, target_relations=target_relations)
+            ev_id_set = {e.evidence_id for e in evidences} if evidences else set()
+            verify_facts: list[dict[str, Any]] = []
+            uncertain_facts: list[dict[str, Any]] = []
+            for s in target_topic.slots:
+                if s.value is not None and str(s.value).strip() != "":
+                    has_ev = not evidences or any(eid in ev_id_set for eid in s.evidence_refs)
+                    if has_ev:
+                        if s.state == "filled":
+                            verify_facts.append({"key": s.key, "value": s.value})
+                        elif s.state == "uncertain":
+                            uncertain_facts.append({"key": s.key, "value": s.value})
+            return TargetContext(
+                verify_facts=verify_facts,
+                uncertain_facts=uncertain_facts,
+                target_relations=target_relations,
+            )
 
         return TargetContext(target_relations=target_relations)
 

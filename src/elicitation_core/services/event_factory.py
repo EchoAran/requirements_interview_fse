@@ -19,8 +19,8 @@ class EventFactory:
 
         if proposed_op == "conflict":
             return "conflict"
-        if proposed_op == "mark_uncertain" and not new_empty:
-            return "mark_uncertain"
+        if proposed_op in ("mark_uncertain", "defer_uncertain") and not new_empty:
+            return proposed_op
         if old_empty and not new_empty:
             return "add"
         if not old_empty and new_empty:
@@ -100,15 +100,16 @@ class EventFactory:
             if slot.value is not None and str(slot.value).strip() != "":
                 effective_new_val = slot.value
 
-        if effective_new_val is None or effective_new_val.strip() == "":
+        is_deferred = op == "defer_uncertain"
+        if effective_new_val is None or str(effective_new_val).strip() == "":
             new_state = "empty"
             effective_val = None
+        elif op in ("mark_uncertain", "defer_uncertain"):
+            new_state = "uncertain"
+            effective_val = effective_new_val
         elif op == "conflict":
             new_state = "conflict"
             effective_val = slot.value  # Retain previous candidate in value while marking conflict
-        elif op == "mark_uncertain":
-            new_state = "uncertain"
-            effective_val = effective_new_val
         else:
             new_state = "filled"
             effective_val = effective_new_val
@@ -125,11 +126,13 @@ class EventFactory:
         before_dict = {
             "value": slot.value,
             "state": slot.state,
+            "deferred": getattr(slot, "deferred", False),
             "revisions_count": len(slot.revisions),
         }
         after_dict = {
             "value": effective_val,
             "state": new_state,
+            "deferred": is_deferred,
             "revision": revision.model_dump(),
         }
 

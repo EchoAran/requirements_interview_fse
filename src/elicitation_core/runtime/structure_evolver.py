@@ -1,7 +1,10 @@
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from ..llm.client import LLMClient
 from ..models.dependency import DependencyEdge
@@ -215,6 +218,28 @@ class StructureEvolver:
 
         return new_topic, [topic_event] + slot_events
 
+    @staticmethod
+    def _would_create_cycle(dependencies: list[DependencyEdge], source: str, target: str) -> bool:
+        """Determines if adding an edge (source -> target) creates a directed cycle in the dependency graph."""
+        if source == target:
+            return True
+        adj: dict[str, list[str]] = {}
+        for edge in dependencies:
+            adj.setdefault(edge.source, []).append(edge.target)
+
+        queue = [target]
+        visited = set()
+        while queue:
+            curr = queue.pop(0)
+            if curr == source:
+                return True
+            if curr not in visited:
+                visited.add(curr)
+                for nxt in adj.get(curr, []):
+                    if nxt not in visited:
+                        queue.append(nxt)
+        return False
+
     async def evolve(
         self,
         state: ProjectState,
@@ -227,22 +252,29 @@ class StructureEvolver:
         all_topics = state.get_all_topics()
         turn_idx = current_turn_idx if current_turn_idx is not None else state.turn_index
 
-        # Dynamic relation resolution: consume relation candidates and emit dependency_added events
         for rel in interpretation.relation_candidates:
             if rel.relation_type == "depends_on":
                 src_t = state.find_topic_by_id(rel.source_topic_id) or state.find_topic_by_number(rel.source_topic_id)
                 tgt_t = state.find_topic_by_id(rel.target_topic_id) or state.find_topic_by_number(rel.target_topic_id)
                 if src_t and tgt_t and src_t.topic_id != tgt_t.topic_id:
                     new_edge = DependencyEdge(source=src_t.topic_number, target=tgt_t.topic_number)
-                    if not any(e.source == new_edge.source and e.target == new_edge.target for e in state.dependencies):
-                        dep_event = EventFactory.create_dependency_added_event(
-                            source_topic_number=src_t.topic_number,
-                            target_topic_number=tgt_t.topic_number,
-                            turn_id=turn_id,
-                            evidence_refs=evidence_refs,
-                        )
-                        events.append(dep_event)
-                        state.dependencies.append(new_edge)
+                    already_exists = any(e.source == new_edge.source and e.target == new_edge.target for e in state.dependencies)
+                    if not already_exists:
+                        if not self._would_create_cycle(state.dependencies, src_t.topic_number, tgt_t.topic_number):
+                            dep_event = EventFactory.create_dependency_added_event(
+                                source_topic_number=src_t.topic_number,
+                                target_topic_number=tgt_t.topic_number,
+                                turn_id=turn_id,
+                                evidence_refs=evidence_refs,
+                            )
+                            events.append(dep_event)
+                            state.dependencies.append(new_edge)
+                        else:
+                            logger.warning(
+                                "Rejected candidate dependency %s -> %s to prevent directed cycle in dependency graph.",
+                                src_t.topic_number,
+                                tgt_t.topic_number,
+                            )
 
         # Resolve candidate emergent topics
         for candidate in interpretation.emergent_topic_candidates:

@@ -66,8 +66,6 @@ class SchedulerConfig(BaseModel):
 
 class StrategyConfig(BaseModel):
     max_target_slots: int = Field(default=1)
-    short_value_char_threshold: int = Field(default=12)
-    emergence_deepen_turn_window: int = Field(default=2)
 
 
 class ContextBudgetConfig(BaseModel):

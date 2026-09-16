@@ -184,6 +184,8 @@ class StateReducer:
 
         target_slot.value = new_value
         target_slot.state = new_state
+        if "deferred" in event.after:
+            target_slot.deferred = bool(event.after["deferred"])
         if event.evidence_refs:
             for ref in event.evidence_refs:
                 if ref not in target_slot.evidence_refs:
@@ -206,9 +208,9 @@ class StateReducer:
         if target_slot.state == "uncertain":
             if target_slot.value is None or str(target_slot.value).strip() == "":
                 raise StateReducerValidationError(f"Slot {target_slot.slot_number} state='uncertain' but value is empty")
-            has_uncertain_rev = any(r.operation == "mark_uncertain" for r in target_slot.revisions)
+            has_uncertain_rev = any(r.operation in ("mark_uncertain", "defer_uncertain") for r in target_slot.revisions)
             if not has_uncertain_rev:
-                raise StateReducerValidationError(f"Slot {target_slot.slot_number} is in uncertain state but no mark_uncertain revision exists")
+                raise StateReducerValidationError(f"Slot {target_slot.slot_number} is in uncertain state but no mark_uncertain/defer_uncertain revision exists")
         if target_slot.state == "conflict":
             has_conflict_rev = any(r.operation == "conflict" for r in target_slot.revisions)
             if not has_conflict_rev:

@@ -13,6 +13,7 @@ class SlotRevision(BaseModel):
         "refine",
         "conflict",
         "mark_uncertain",
+        "defer_uncertain",
         "invalidate",
         "clear"
     ]
@@ -30,6 +31,7 @@ class SlotState(BaseModel):
     origin: Literal["initial", "added"] = "initial"
     is_required: bool = True
     state: Literal["empty", "filled", "uncertain", "conflict"] = "empty"
+    deferred: bool = Field(default=False)
     evidence_refs: list[str] = Field(default_factory=list)
     revisions: list[SlotRevision] = Field(default_factory=list)
 
@@ -109,3 +111,15 @@ class ProjectState(BaseModel):
         if not self.current_topic_id:
             return None
         return self.find_topic_by_id(self.current_topic_id)
+
+    def get_all_slots(self) -> list[SlotState]:
+        slots: list[SlotState] = []
+        for t in self.get_all_topics():
+            slots.extend(t.slots)
+        return slots
+
+    def find_slot_by_id(self, slot_id: str) -> Optional[SlotState]:
+        for s in self.get_all_slots():
+            if s.slot_id == slot_id:
+                return s
+        return None

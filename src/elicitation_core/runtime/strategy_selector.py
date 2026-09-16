@@ -1,4 +1,5 @@
-from typing import Optional
+from typing import Optional, Set
+from ..config import StrategyConfig
 from ..models.event import EvidenceRef
 from ..models.scheduling import IntentDecision, SchedulerDecision
 from ..models.state import ProjectState, TopicState
@@ -17,9 +18,9 @@ STRATEGY_INSTRUCTIONS: dict[str, str] = {
         "Key Guidelines: Explicitly point to the target slot, keep the question concise, concrete, and easily understood, and avoid compound questionnaire lists."
     ),
     "deepen": (
-        "Phase: Deep Elicitation & Edge Case Exploration;\n"
-        "Core Objective: Probe deeper into implicit requirements, clarify ambiguous operational boundaries, and uncover exception handling scenarios based on existing facts;\n"
-        "Key Guidelines: Ground the question firmly in previously given answers, focusing on concrete workflow nuances, boundary rules, or uncertainties."
+        "Phase: Targeted Deepening Within Active Topic;\n"
+        "Core Objective: Clarify the specific missing nuance, tentative rule, or boundary condition for the designated target item without straying to other topics or slots;\n"
+        "Key Guidelines: Ground the question strictly in existing evidence, ask only about the single designated target item and clarification reason, and avoid repeating recently covered rules or boundaries."
     ),
     "resolve_conflict": (
         "Phase: Conflict Resolution;\n"
@@ -28,8 +29,8 @@ STRATEGY_INSTRUCTIONS: dict[str, str] = {
     ),
     "verify": (
         "Phase: Synthesis & Verification;\n"
-        "Core Objective: Concisely synthesize the key confirmed requirement points under the active topic and verify accuracy and completeness with the interviewee;\n"
-        "Key Guidelines: Briefly summarize established points, asking if anything needs revision or addition before transitioning forward."
+        "Core Objective: Concisely synthesize both confirmed requirement points and pending tentative items under the active topic, verifying completeness with the interviewee;\n"
+        "Key Guidelines: Explicitly present uncertain items as pending rather than confirmed facts, and ask if anything needs revision or addition before concluding the topic."
     ),
     "confirm_control": (
         "Phase: Control Intent Confirmation;\n"
@@ -44,8 +45,8 @@ QUESTION_STRATEGY_INSTRUCTIONS = STRATEGY_INSTRUCTIONS
 class StrategySelector:
     """Selects question strategy and produces structured QuestionPlan based on Topic state signals and conversation intent."""
 
-    def __init__(self):
-        pass
+    def __init__(self, config: Optional[StrategyConfig] = None):
+        self.config = config or StrategyConfig()
 
     def select_plan(
         self,
@@ -55,12 +56,13 @@ class StrategySelector:
         scheduler_decision: Optional[SchedulerDecision] = None,
         transition_from_topic_id: Optional[str] = None,
         evidence_refs: Optional[list[EvidenceRef]] = None,
+        deferred_slot_ids: Optional[Set[str]] = None,
+        forced_deepen_target: Optional[tuple[str, str]] = None,
     ) -> QuestionPlan:
         """Determines the appropriate strategy and target slots based on state signals."""
         view = StateView(state, evidence_refs=evidence_refs)
         topic_id = topic.topic_id
 
-        # 1. Highest Priority: Intent confirmation
         if intent_decision and intent_decision.needs_confirmation:
             tgt_topic_id = getattr(intent_decision, "target_topic_id", None) or getattr(intent_decision, "target_topic_number", None)
             return QuestionPlan(
@@ -71,7 +73,6 @@ class StrategySelector:
                 transition_from_topic_id=transition_from_topic_id,
             )
 
-        # 2. Priority 2: Conflict resolution
         conflict_slots = view.get_conflict_slots(topic_id)
         if conflict_slots:
             return QuestionPlan(
@@ -81,7 +82,6 @@ class StrategySelector:
                 transition_from_topic_id=transition_from_topic_id,
             )
 
-        # 3. Priority 3: Initial exploration (no genuine interview evidence on this topic)
         if view.interview_evidence_count(topic_id) == 0:
             return QuestionPlan(
                 strategy="explore",
@@ -89,10 +89,9 @@ class StrategySelector:
                 transition_from_topic_id=transition_from_topic_id,
             )
 
-        # 4. Priority 4: Fill gap (empty required slots)
         empty_req_slots = view.get_empty_required_slots(topic_id)
         if empty_req_slots:
-            target_ids = [s.slot_id for s in empty_req_slots[:1]]
+            target_ids = [s.slot_id for s in empty_req_slots[:self.config.max_target_slots]]
             return QuestionPlan(
                 strategy="fill_gap",
                 topic_id=topic_id,
@@ -100,18 +99,30 @@ class StrategySelector:
                 transition_from_topic_id=transition_from_topic_id,
             )
 
-        # 5. Priority 5: Deepen (uncertain slots or heuristic deepening needed)
-        uncertain_slots = view.get_uncertain_slots(topic_id)
-        if uncertain_slots or view.needs_deepening(topic_id):
-            target_ids = [s.slot_id for s in uncertain_slots] if uncertain_slots else []
+        if forced_deepen_target:
+            forced_slot_id, forced_reason = forced_deepen_target
+            if topic.find_slot(forced_slot_id):
+                return QuestionPlan(
+                    strategy="deepen",
+                    topic_id=topic_id,
+                    target_slot_ids=[forced_slot_id],
+                    deepening_reason=forced_reason,
+                    transition_from_topic_id=transition_from_topic_id,
+                )
+
+        deepen_candidates = view.get_deepening_target_slots(topic_id, deferred_slot_ids=deferred_slot_ids)
+        if deepen_candidates:
+            selected = deepen_candidates[:self.config.max_target_slots]
+            target_ids = [slot.slot_id for slot, _ in selected]
+            reason = selected[0][1]
             return QuestionPlan(
                 strategy="deepen",
                 topic_id=topic_id,
                 target_slot_ids=target_ids,
+                deepening_reason=reason,
                 transition_from_topic_id=transition_from_topic_id,
             )
 
-        # 6. Priority 6: Verify (all required information collected and clear)
         return QuestionPlan(
             strategy="verify",
             topic_id=topic_id,

@@ -78,6 +78,7 @@ class TargetSlotContext(BaseModel):
     state: str = "empty"
     is_required: bool = True
     evidence_snippets: list[EvidenceSnippet] = Field(default_factory=list)
+    deepening_reason: Optional[str] = None
 
 
 class TargetContext(BaseModel):
@@ -86,6 +87,7 @@ class TargetContext(BaseModel):
     conflict_claims: dict[str, list[ConflictClaim]] = Field(default_factory=dict)
     target_relations: list[dict[str, Any]] = Field(default_factory=list)
     verify_facts: list[dict[str, Any]] = Field(default_factory=list)
+    uncertain_facts: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class QuestionPlan(BaseModel):
@@ -97,6 +99,7 @@ class QuestionPlan(BaseModel):
     target_topic_id: Optional[str] = None
     transition_from_topic_id: Optional[str] = None
     control_intent: Optional[str] = None
+    deepening_reason: Optional[str] = None
 
 
 class QuestionGenerationInput(BaseModel):
