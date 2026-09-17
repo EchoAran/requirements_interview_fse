@@ -10,12 +10,14 @@
 ## Step 2: Formulate 6 to 9 structured Sections (Section) representing high-level functional modules or architectural concerns:
   - Sequence sections in natural interview priority and logical flow, numbered sequentially as "section-1", "section-2", etc.
   - section_content: Concisely summarize the core domain module or focus area (e.g., "Core Workflow & Booking Lifecycle").
+  - Coverage Lens: before finalizing the sections, re-read [initial_requirements] through the following requirement aspects and fold every aspect that has a basis in the text into the most fitting section or topic: business goals & product scope; stakeholders & user roles; business rules & mandated constraints (legal or standards obligations, operational environment); data entities & data lifecycle; external interfaces & actor interactions; functional behavior including state-dependent rules and exception handling; quality attributes (performance, capacity, availability, reliability, fault tolerance, security, privacy, usability, accessibility); transition & evolution (migration, data conversion, release, maintenance); prioritization & acceptance/validation.
+  - Coverage Lens is a completeness checklist, NOT an outline to mirror: an aspect with no basis in [initial_requirements] must not become a section, topic, or slot, and sections must never be added just to match the checklist.
 ## Step 3: For each Section, decompose 3 to 6 concrete Topics (Topic):
   - Focus each topic on a specific business scenario, feature capability, or key quality constraint, numbered sequentially as "topic-1-1", "topic-1-2", etc.
   - topic_content: Clearly define the specific business aspects to be explored during the interview (e.g., "User Reservation Rules & Eligibility Validation").
 ## Step 4: For each Topic, design 2 to 4 essential Information Slots (Slot):
   - Slots represent mandatory factual attributes and decision criteria to elicit and confirm with the interviewee, numbered sequentially as "slot-1-1-1", "slot-1-1-2", etc.
-  - slot_key: Accurate and concise name of the requirement attribute (e.g., "Prerequisite Eligibility Requirements", "Approval Routing Rules").
+  - slot_key: Accurate and concise name of the requirement attribute (e.g., "Prerequisite Eligibility Requirements", "Approval Routing Rules"). Name concrete business attributes of the target domain; never name requirements-engineering meta-concepts (e.g., "Acceptance Criteria Definition", "Requirement Priority Scheme").
 
 # STRICT RULES & GUARDRAILS:
 1. Grounding vs Discovery: Ground the framework scope in the user's initial requirements. Slots are defined as discovery targets for the interview; do NOT fabricate unconfirmed business facts or assume unstated details are already validated.

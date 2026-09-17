@@ -303,6 +303,7 @@ class StructureEvolver:
                             evidence_refs=evidence_refs,
                         )
                         events.append(created_ev)
+                        target_topic.slots.append(new_slot)
 
             elif resolution.action == "create":
                 target_sec_id = next((s.section_id for s in state.sections if s.section_id == "section_emergent"), None)

@@ -211,6 +211,11 @@ class StateInvariantValidator:
         if len(all_topic_numbers) != len(all_topics):
             errors.append("Rule 17 Violation: Duplicate topic_number detected in project state.")
 
+        # 18. Slot numbers must be unique so that every slot reference resolves to exactly one slot
+        all_slot_numbers = {s.slot_number for t in all_topics for s in t.slots}
+        if len(all_slot_numbers) != sum(len(t.slots) for t in all_topics):
+            errors.append("Rule 18 Violation: Duplicate slot_number detected in project state.")
+
         return errors
 
     @classmethod

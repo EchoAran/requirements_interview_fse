@@ -99,6 +99,13 @@ class SlotFiller:
             module="SlotFiller",
             prompt_name="slots_filling",
         )
+        foreign_slot_keys: dict[str, str] = {
+            s.slot_number: s.key
+            for t in state.get_all_topics()
+            if t.topic_id != target_topic.topic_id
+            for s in t.slots
+        }
+
         for attempt in range(2):
             if not isinstance(raw_result, list):
                 raise LLMOutputError(f"SlotFiller expected a JSON array, got {type(raw_result).__name__}")
@@ -148,6 +155,15 @@ class SlotFiller:
                             existing_slot = s
                             s_num = s.slot_number
                             break
+
+                if not existing_slot and s_num:
+                    # A slot_number is only meaningful inside its owning topic: a number taken from
+                    # [other_topics_summary] either restates a slot that the owning topic fills on its
+                    # own fill call (drop it) or is an unreliable label for a genuinely new slot (new
+                    # slots are always numbered by the system, never by the model).
+                    if foreign_slot_keys.get(s_num) == s_key:
+                        continue
+                    s_num = ""
 
                 if existing_slot:
                     proposal_key = f"existing:{existing_slot.slot_id}"
@@ -215,16 +231,8 @@ class SlotFiller:
                 )
                 events.append(event)
             else:
-                if not s_num:
-                    created_count = len([e for e in events if e.event_type == "slot_created"])
-                    s_num = f"slot-{target_topic.topic_number.replace('topic-', '')}-{len(target_topic.slots) + created_count + 1}"
-
-                # Reject proposals that would alias a slot owned by another topic
-                for other_t in state.get_all_topics():
-                    if other_t.topic_id != target_topic.topic_id and other_t.find_slot_by_number(s_num) is not None:
-                        raise LLMOutputError(
-                            f"Slot proposal references slot_number '{s_num}' that belongs to another topic"
-                        )
+                created_count = len([e for e in events if e.event_type == "slot_created"])
+                s_num = f"{target_topic.topic_number}-dyn-{len(target_topic.slots) + created_count + 1}"
 
                 # Emit slot_created event for genuine dynamic slot on target_topic
                 new_slot_id = IdFactory.create_slot_id(s_num)

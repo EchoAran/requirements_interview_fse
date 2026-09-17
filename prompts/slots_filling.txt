@@ -28,7 +28,7 @@
 # STRICT RULES & GUARDRAILS:
 1. No Data Erasure & No Hallucinated Uncertainty: Do not erase existing values with "None", "null", "N/A", "unknown", or empty strings "". Only for "defer_uncertain" on a slot with no existing or tentative value may slot_value be null. If a slot is merely unmentioned or the interviewee has no comment, do NOT output that slot. Do NOT use "mark_uncertain" or "defer_uncertain" because of the model's own low confidence. However, when the interviewee explicitly requests to defer, postpone, or set a slot as tentative/deferred, you MUST emit "defer_uncertain" for that slot.
 2. Grounded Evidence Only: Base updates strictly on explicit statements in the latest turn. Do NOT hallucinate unstated rules or speculate.
-3. Topic Boundary Discipline: Keep facts bounded to [current_topic]. Do not place requirements belonging to other topics into this topic's slots.
+3. Topic Boundary Discipline: Keep facts bounded to [current_topic]. Do not place requirements belonging to other topics into this topic's slots, and NEVER reuse a slot_number that appears under [other_topics_summary].
 4. One Proposal Per Slot: Output each existing slot_number at most once. If multiple compatible facts from the latest turn belong to the same slot, combine them into one complete slot_value. Evaluate every operation against the original [current_topic_slots] state; output items do not update the state for later items.
 5. Complete Proposal Items: Every proposal object MUST contain the keys "slot_number", "slot_key", "slot_value", and "operation". For an existing slot, reuse its exact slot_number and slot_key from [current_topic_slots]. For a new slot, "slot_number" may be null and "slot_key" MUST be the new attribute name.
 6. Operation Vocabulary: "operation" MUST be exactly one of "add", "update", "refine", "mark_uncertain", "defer_uncertain", "conflict". Never emit any other operation value, and never omit the operation key.
@@ -53,6 +53,12 @@
     "slot_key": "Audit Archive Retention Period",
     "slot_value": "3 days (tentative, awaiting legal team confirmation)",
     "operation": "mark_uncertain"
+  },
+  {
+    "slot_number": null,
+    "slot_key": "Correction Submission Window",
+    "slot_value": "Corrections must be submitted within 5 working days of the record being issued",
+    "operation": "add"
   }
 ]
 
