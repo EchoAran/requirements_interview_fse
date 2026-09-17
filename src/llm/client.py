@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from config import ModelConfig
 from models.run_record import RunError
+from .adapters import normalize_messages
 from .exceptions import LLMConfigurationError, LLMOutputError, LLMTransportError
 from .schemas import LLMCallRecord
 
@@ -78,6 +79,21 @@ class LLMClient:
         if not self.config.model_name or not self.config.model_name.strip():
             raise LLMConfigurationError("LLM model name is not configured.")
 
+    def _build_request(self, prompt: str, query: str) -> dict[str, Any]:
+        """Build the outgoing payload, adapted to the target model family.
+
+        Serves as the single source of truth for both the actual HTTP request and the
+        audited ``request`` field, so the audit trail always matches what was sent.
+        """
+        messages: list[dict[str, str]] = [{"role": "system", "content": prompt}]
+        if query and query.strip():
+            messages.append({"role": "user", "content": query.strip()})
+        return {
+            "model": self.config.model_name,
+            "messages": normalize_messages(messages, self.config.model_name),
+            "temperature": self.config.temperature,
+        }
+
     async def complete_text(
         self,
         prompt: str,
@@ -107,16 +123,8 @@ class LLMClient:
         call_id = f"call_{uuid.uuid4().hex[:12]}"
         api_key = self.config.get_effective_api_key()
 
-        messages = [{"role": "system", "content": prompt}]
-        if query and query.strip():
-            messages.append({"role": "user", "content": query.strip()})
-
-        # Sanitize request without API keys
-        request_data = {
-            "model": self.config.model_name,
-            "messages": messages,
-            "temperature": self.config.temperature,
-        }
+        # Sanitized payload (no API keys) used both for transport and audit records.
+        request_data = self._build_request(prompt, query)
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
@@ -254,11 +262,6 @@ class LLMClient:
             latency_ms = (time.perf_counter() - start_time) * 1000.0
 
             if self.on_call_completed:
-                request_data = {
-                    "model": self.config.model_name,
-                    "messages": [{"role": "system", "content": prompt}] + ([{"role": "user", "content": query}] if query else []),
-                    "temperature": self.config.temperature,
-                }
                 record = LLMCallRecord(
                     call_id=call_id,
                     turn_id=turn_id,
@@ -268,7 +271,7 @@ class LLMClient:
                     temperature=self.config.temperature,
                     prompt=prompt,
                     query=query if query else None,
-                    request=request_data,
+                    request=self._build_request(prompt, query),
                     raw_response=raw,
                     parsed_response=parsed,
                     latency_ms=latency_ms,
@@ -280,11 +283,6 @@ class LLMClient:
         except Exception as e:
             latency_ms = (time.perf_counter() - start_time) * 1000.0
             if self.on_call_completed:
-                request_data = {
-                    "model": self.config.model_name,
-                    "messages": [{"role": "system", "content": prompt}] + ([{"role": "user", "content": query}] if query else []),
-                    "temperature": self.config.temperature,
-                }
                 record = LLMCallRecord(
                     call_id=call_id,
                     turn_id=turn_id,
@@ -294,7 +292,7 @@ class LLMClient:
                     temperature=self.config.temperature,
                     prompt=prompt,
                     query=query if query else None,
-                    request=request_data,
+                    request=self._build_request(prompt, query),
                     raw_response=raw,
                     parsed_response=None,
                     latency_ms=latency_ms,
