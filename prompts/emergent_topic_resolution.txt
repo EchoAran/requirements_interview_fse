@@ -12,25 +12,25 @@
 # ADJUDICATION ACTIONS & CRITERIA:
 1. `create`: The candidate represents a substantially distinct, high-value business domain uncovered by all existing topics that warrants dedicated interview exploration.
    - reason_code: Must be "distinct_concern"
-   - target_topic_id: Must be null
+   - target_topic_number: Must be null
 2. `merge`: The candidate significantly overlaps with an existing topic, representing a sub-feature, refined attribute, or synonym of that topic.
    - reason_code: Choose "duplicate_synonym" (synonym overlap) or "merge_into_existing" (refinement / sub-attribute)
-   - target_topic_id: Must be the exact topic_id or topic_number of the target topic (e.g., "topic-1-1")
+   - target_topic_number: Must be the exact topic_number of the target topic (e.g., "topic-1-1")
 3. `ignore`: The candidate contains insufficient factual information, constitutes casual banter, or falls outside the project scope.
    - reason_code: Choose "insufficient_evidence" or "out_of_scope"
-   - target_topic_id: Must be null
+   - target_topic_number: Must be null
 
 # STRICT RULES & GUARDRAILS:
 1. Compact Catalog Bias: If the candidate can be represented as a refined slot or attribute under an existing topic, prioritize `merge` to prevent catalog fragmentation and interview sprawl.
 2. Parameter Consistency:
-   - When action is "create" or "ignore", target_topic_id MUST be null.
-   - When action is "merge", target_topic_id MUST be a valid non-null ID from [existing_topics].
+   - When action is "create" or "ignore", target_topic_number MUST be null.
+   - When action is "merge", target_topic_number MUST be an exact non-null topic_number from [existing_topics].
 3. Pure JSON Output: Output ONLY a valid JSON object matching the format below without markdown code blocks or outer explanations.
 
 # OUTPUT FORMAT (Direct pure JSON object):
 {
   "action": "create",
-  "target_topic_id": null,
+  "target_topic_number": null,
   "reason_code": "distinct_concern"
 }
 

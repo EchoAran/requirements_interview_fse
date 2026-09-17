@@ -2,8 +2,8 @@
 # TASK: Based on the interviewee's response in the latest turn, analyze its comprehensive impact on the interview structure: identify affected existing topics, surface genuine emergent candidate topics, and discover prerequisite topic dependencies.
 
 # INPUT:
-- Active Topic ID As [current_topic_id]:
-  {current_topic_id}
+- Active Topic Number As [current_topic_number]:
+  {current_topic_number}
 - Latest Turn Exchange As [latest_turn]:
   - Interviewer Question: {interviewer_message}
   - Interviewee Response: {interviewee_message}
@@ -14,14 +14,14 @@
 # ANALYSIS STEPS:
 ## Step 1: Identify Affected Existing Topics (affected_existing_topics):
   - Determine if the response provides information that fills or updates one or more existing topics from [topic_catalog] (a response may span multiple topics).
-  - Use exact topic_id or topic_number strings from [topic_catalog], and provide a relevance score between 0.0 and 1.0.
+  - Use exact topic_number strings from [topic_catalog], and provide a relevance score between 0.0 and 1.0.
   - If the interviewee directly answered the active topic question, include the active topic in this list.
 ## Step 2: Identify Genuinely Novel Emergent Topics (emergent_topic_candidates):
   - Propose emergent topics ONLY when the interviewee explicitly introduces substantial new business domains, special workflows, or critical constraints entirely uncovered by [topic_catalog].
   - If the new information is simply an attribute, sub-step, or synonym of an existing topic, do NOT propose a new topic.
   - For genuine candidates, supply title, description, 1 to 3 suggested_slots, and confidence (0.0 to 1.0).
 ## Step 3: Discover Direct Prerequisite Dependencies (relation_candidates):
-  - Record a dependency ONLY when the interviewee explicitly asserts that Topic B must strictly be defined, completed, or established BEFORE Topic A can be explored or executed (source_topic_id = prerequisite topic B, target_topic_id = dependent topic A, relation_type = "depends_on").
+  - Record a dependency ONLY when the interviewee explicitly asserts that Topic B must strictly be defined, completed, or established BEFORE Topic A can be explored or executed (source_topic_number = prerequisite topic B, target_topic_number = dependent topic A, relation_type = "depends_on").
   - Conceptual similarity, shared data fields, or touching upon two topics in the same turn are NOT dependencies.
   - Never emit a reverse dependency against an existing prerequisite direction.
 
@@ -29,13 +29,14 @@
 1. Strict Factual Grounding: All findings must be grounded directly in the interviewee's latest response. Strictly prohibit hallucinating unmentioned topics, speculative dependencies, or associative relationships.
 2. Orthogonality & Anti-Duplication: Prioritize mapping facts to existing topics. Prevent catalog fragmentation caused by synonym topics.
 3. Standard English Descriptions: Use clear English for all titles, descriptions, and suggested slot names.
-4. Pure JSON Output: Output ONLY a valid JSON object matching the format below.
+4. Topic Number Grounding: Every topic reference must be an exact topic_number string taken from [topic_catalog]. Never invent topic numbers and never emit internal system identifiers.
+5. Pure JSON Output: Output ONLY a valid JSON object matching the format below.
 
 # OUTPUT FORMAT (Direct pure JSON object):
 {
   "affected_existing_topics": [
     {
-      "topic_id": "topic-1-1",
+      "topic_number": "topic-1-1",
       "relevance": 0.95
     }
   ],
@@ -49,8 +50,8 @@
   ],
   "relation_candidates": [
     {
-      "source_topic_id": "topic-1-1",
-      "target_topic_id": "topic-1-2",
+      "source_topic_number": "topic-1-1",
+      "target_topic_number": "topic-1-2",
       "relation_type": "depends_on"
     }
   ]

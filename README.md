@@ -100,47 +100,46 @@ semi_structured_interview_fse/
 │   ├── slots_filling.txt               # Slot extraction & conflict tagging
 │   └── remarks_generation.txt          # Isolated strategy question generation
 ├── src/
-│   └── elicitation_core/
-│       ├── config.py                   # Pydantic V2 hierarchical configuration models
-│       ├── pipeline.py                 # Core workflow orchestrator (ElicitationPipeline)
-│       ├── llm/                        # Async LLM client & offline replay client
-│       │   ├── client.py               # Async LLM transport with exponential retries
-│       │   ├── replay_client.py        # Deterministic offline replay client from logs
-│       │   ├── schemas.py              # LLM call schemas & JSON structured contracts
-│       │   └── exceptions.py           # Exception hierarchy
-│       ├── models/                     # Domain core data models (Pydantic V2)
-│       │   ├── state.py                # ProjectState, SectionState, TopicState, SlotState, SlotRevision
-│       │   ├── event.py                # StateEvent, EvidenceRef (Event sourcing & traceability)
-│       │   ├── turn.py                 # TurnRecord, TurnPair (Dialogue turns)
-│       │   ├── dependency.py           # DependencyEdge, TopicPriorityItem, PriorityResult
-│       │   ├── interpretation.py       # EvidenceInterpretation, AffectedTopic, EmergentTopicCandidate
-│       │   ├── scheduling.py           # IntentDecision, TopicSchedulingView, TopicScore, SchedulerDecision
-│       │   ├── strategy.py             # StrategyCode, QuestionPlan, QuestionGenerationInput, TargetContext
-│       │   ├── run_record.py           # UnifiedDecisionRecord, LLMCallRecord, RunError (Audit models)
-│       │   └── updates.py              # StepResult, SlotUpdateProposal, OperationSelectionResult
-│       ├── storage/                    # Storage layer: atomic snapshot writes & append-only JSONL
-│       │   └── project_store.py
-│       ├── services/                   # Pure service algorithms
-│       │   ├── id_factory.py           # Unique identifier factory
-│       │   ├── event_factory.py        # Strongly-typed immutable event builder
-│       │   ├── state_reducer.py        # Two-phase transactional state reducer
-│       │   ├── state_view.py           # Read-only state view & multi-factor metrics extractor
-│       │   ├── question_context_builder.py # Question target context & payload assembly
-│       │   ├── context_budget_manager.py   # Token budget manager & progressive P7~P4 trimming
-│       │   ├── validators.py           # 15 Global state invariant validators
-│       │   └── summary_generator.py    # Final Markdown requirements specification exporter
-│       ├── initialization/             # Initialization domain
-│       │   ├── scaffold_generator.py   # Outline & section generator
-│       │   ├── prefiller.py            # Initial slot prefiller
-│       │   └── dependency_builder.py   # Initial topological dependency builder
-│       └── runtime/                    # Runtime interaction & reasoning domain
-│           ├── evidence_interpreter.py # Evidence interpretation & cross-topic association
-│           ├── structure_evolver.py    # Emergent topic resolution & dynamic dependencies
-│           ├── slot_filler.py          # Slot extraction, refinement & conflict marking
-│           ├── intent_controller.py    # Intent detection & confidence gating
-│           ├── scheduler.py            # 7-Factor dynamic utility scheduler
-│           ├── strategy_selector.py    # 6-Dimension question strategy selector
-│           └── question_generator.py   # 13-Block isolated prompt builder & generation
+│   ├── config.py                   # Pydantic V2 hierarchical configuration models
+│   ├── pipeline.py                 # Core workflow orchestrator (ElicitationPipeline)
+│   ├── llm/                        # Async LLM client & offline replay client
+│   │   ├── client.py               # Async LLM transport with exponential retries
+│   │   ├── replay_client.py        # Deterministic offline replay client from logs
+│   │   ├── schemas.py              # LLM call schemas & JSON structured contracts
+│   │   └── exceptions.py           # Exception hierarchy
+│   ├── models/                     # Domain core data models (Pydantic V2)
+│   │   ├── state.py                # ProjectState, SectionState, TopicState, SlotState, SlotRevision
+│   │   ├── event.py                # StateEvent, EvidenceRef (Event sourcing & traceability)
+│   │   ├── turn.py                 # TurnRecord, TurnPair (Dialogue turns)
+│   │   ├── dependency.py           # DependencyEdge, TopicPriorityItem, PriorityResult
+│   │   ├── interpretation.py       # EvidenceInterpretation, AffectedTopic, EmergentTopicCandidate
+│   │   ├── scheduling.py           # IntentDecision, TopicSchedulingView, TopicScore, SchedulerDecision
+│   │   ├── strategy.py             # StrategyCode, QuestionPlan, QuestionGenerationInput, TargetContext
+│   │   ├── run_record.py           # UnifiedDecisionRecord, LLMCallRecord, RunError (Audit models)
+│   │   └── updates.py              # StepResult, SlotUpdateProposal, OperationSelectionResult
+│   ├── storage/                    # Storage layer: atomic snapshot writes & append-only JSONL
+│   │   └── project_store.py
+│   ├── services/                   # Pure service algorithms
+│   │   ├── id_factory.py           # Unique identifier factory
+│   │   ├── event_factory.py        # Strongly-typed immutable event builder
+│   │   ├── state_reducer.py        # Two-phase transactional state reducer
+│   │   ├── state_view.py           # Read-only state view & multi-factor metrics extractor
+│   │   ├── question_context_builder.py # Question target context & payload assembly
+│   │   ├── context_budget_manager.py   # Token budget manager & progressive P7~P4 trimming
+│   │   ├── validators.py           # 15 Global state invariant validators
+│   │   └── summary_generator.py    # Final Markdown requirements specification exporter
+│   ├── initialization/             # Initialization domain
+│   │   ├── scaffold_generator.py   # Outline & section generator
+│   │   ├── prefiller.py            # Initial slot prefiller
+│   │   └── dependency_builder.py   # Initial topological dependency builder
+│   └── runtime/                    # Runtime interaction & reasoning domain
+│       ├── evidence_interpreter.py # Evidence interpretation & cross-topic association
+│       ├── structure_evolver.py    # Emergent topic resolution & dynamic dependencies
+│       ├── slot_filler.py          # Slot extraction, refinement & conflict marking
+│       ├── intent_controller.py    # Intent detection & confidence gating
+│       ├── scheduler.py            # 7-Factor dynamic utility scheduler
+│       ├── strategy_selector.py    # 6-Dimension question strategy selector
+│       └── question_generator.py   # 13-Block isolated prompt builder & generation
 ├── scripts/                            # Operational CLI tools
 │   ├── init_project.py                 # Initialize a new interview project
 │   ├── step.py                         # Advance dialogue turn

@@ -8,12 +8,12 @@ from typing import Any
 # Add src to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from elicitation_core.config import AppConfig
-from elicitation_core.llm.replay_client import ReplayLLMClient
-from elicitation_core.models.state import ProjectState
-from elicitation_core.pipeline import ElicitationPipeline
-from elicitation_core.storage.project_store import ProjectStore
-from elicitation_core.services.state_reducer import StateReducer
+from config import AppConfig
+from llm.replay_client import ReplayLLMClient
+from models.state import ProjectState
+from pipeline import ElicitationPipeline
+from storage.project_store import ProjectStore
+from services.state_reducer import StateReducer
 
 
 def normalize_payload(data: Any) -> Any:

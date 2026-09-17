@@ -6,9 +6,9 @@ from pathlib import Path
 # Add src to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from elicitation_core.config import AppConfig
-from elicitation_core.pipeline import ElicitationPipeline
-from elicitation_core.storage.project_store import ProjectStore
+from config import AppConfig
+from pipeline import ElicitationPipeline
+from storage.project_store import ProjectStore
 
 
 async def main():

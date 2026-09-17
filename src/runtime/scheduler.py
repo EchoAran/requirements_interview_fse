@@ -1,0 +1,164 @@
+import uuid
+from typing import Optional
+
+from models.scheduling import (
+    SchedulerDecision,
+    SchedulerWeights,
+    TopicSchedulingView,
+    TopicScore,
+)
+from models.state import ProjectState, TopicState
+from services.state_view import StateView
+
+
+class Scheduler:
+    """Multi-factor dynamic topic scheduler with hierarchical starvation prevention."""
+
+    def __init__(self, weights: Optional[SchedulerWeights] = None):
+        self.weights = weights or SchedulerWeights()
+
+    def schedule(
+        self,
+        state: ProjectState,
+        scheduling_views: list[TopicSchedulingView],
+        current_topic: Optional[TopicState],
+        turn_id: str,
+        recovery_topic_id: Optional[str] = None,
+    ) -> Optional[SchedulerDecision]:
+        # Filter eligible candidates (Exclude Completed and UserInterrupted)
+        eligible_views = [
+            v for v in scheduling_views
+            if v.status in ("Ongoing", "Pending", "SystemInterrupted")
+        ]
+
+        if not eligible_views:
+            return None
+
+        # Compute multi-factor candidate scores for ranking and decision audit trails
+        candidate_scores: list[TopicScore] = []
+        w = self.weights
+
+        for v in eligible_views:
+            factors: dict[str, float] = {
+                "initial_prior": v.initial_prior,
+                "dependency_readiness": v.dependency_readiness,
+                "unresolved_gap": v.required_empty_ratio,
+                "conflict_signal": v.conflict_ratio,
+                "recent_emergence": v.recent_emergence,
+                "continuity": v.continuity,
+                "user_relevance": v.user_relevance,
+            }
+
+            total = (
+                (w.initial_prior * factors["initial_prior"])
+                + (w.dependency_readiness * factors["dependency_readiness"])
+                + (w.unresolved_gap * factors["unresolved_gap"])
+                + (w.conflict_signal * factors["conflict_signal"])
+                + (w.recent_emergence * factors["recent_emergence"])
+                + (w.continuity * factors["continuity"])
+                + (w.user_relevance * factors["user_relevance"])
+            )
+
+            candidate_scores.append(
+                TopicScore(
+                    topic_id=v.topic_id,
+                    topic_number=v.topic_number,
+                    total=round(total, 4),
+                    factors={k: round(val, 4) for k, val in factors.items()},
+                )
+            )
+
+        candidate_scores.sort(
+            key=lambda item: (
+                item.total,
+                item.factors.get("continuity", 0.0),
+                item.factors.get("initial_prior", 0.0),
+            ),
+            reverse=True,
+        )
+
+        state_view = StateView(state)
+        previous_topic_id = current_topic.topic_id if current_topic else None
+
+        # Level 0: Honor active recovery plan to prevent premature topic switching on stalled slots
+        if recovery_topic_id:
+            recovery_view = next((v for v in eligible_views if v.topic_id == recovery_topic_id), None)
+            if recovery_view and current_topic and current_topic.topic_id == recovery_topic_id and current_topic.topic_status == "Ongoing":
+                return SchedulerDecision(
+                    decision_id=f"dec_{uuid.uuid4().hex[:8]}",
+                    turn_id=turn_id,
+                    selected_topic_id=recovery_view.topic_id,
+                    selected_topic_number=recovery_view.topic_number,
+                    previous_topic_id=previous_topic_id,
+                    candidate_scores=candidate_scores,
+                    reason_codes=["recovery_plan_priority", "conversational_continuity"],
+                )
+
+        # Level 1: Maintain and verify current Ongoing topic when ready for verification
+        if current_topic and current_topic.topic_status == "Ongoing":
+            if any(v.topic_id == current_topic.topic_id for v in eligible_views):
+                if state_view.is_ready_for_verification(current_topic.topic_id):
+                    return SchedulerDecision(
+                        decision_id=f"dec_{uuid.uuid4().hex[:8]}",
+                        turn_id=turn_id,
+                        selected_topic_id=current_topic.topic_id,
+                        selected_topic_number=current_topic.topic_number,
+                        previous_topic_id=previous_topic_id,
+                        candidate_scores=candidate_scores,
+                        reason_codes=["topic_closure_verification", "conversational_continuity"],
+                    )
+
+        # Level 2: When no current ongoing topic is active, prioritize dependency-satisfied topics ready for verification
+        is_current_active_ongoing = (
+            current_topic is not None
+            and current_topic.topic_status == "Ongoing"
+            and any(v.topic_id == current_topic.topic_id for v in eligible_views)
+        )
+
+        if not is_current_active_ongoing:
+            ready_pending_views = [
+                v for v in eligible_views
+                if v.status in ("Pending", "SystemInterrupted")
+                and v.dependency_readiness >= 1.0
+                and state_view.is_ready_for_verification(v.topic_id)
+            ]
+            if ready_pending_views:
+                ready_pending_views.sort(
+                    key=lambda v: (
+                        v.initial_prior,
+                        -state.initial_order.index(v.topic_number) if v.topic_number in state.initial_order else -999,
+                    ),
+                    reverse=True,
+                )
+                selected_v = ready_pending_views[0]
+                return SchedulerDecision(
+                    decision_id=f"dec_{uuid.uuid4().hex[:8]}",
+                    turn_id=turn_id,
+                    selected_topic_id=selected_v.topic_id,
+                    selected_topic_number=selected_v.topic_number,
+                    previous_topic_id=previous_topic_id,
+                    candidate_scores=candidate_scores,
+                    reason_codes=["pending_ready_for_verification", "highest_initial_prior"],
+                )
+
+        # Level 3: Multi-factor utility scheduling among remaining topics needing exploration or gap-filling
+        best_candidate = candidate_scores[0]
+        reason_codes: list[str] = []
+        if best_candidate.factors.get("conflict_signal", 0.0) > 0.0:
+            reason_codes.append("conflict_resolution_priority")
+        if best_candidate.factors.get("recent_emergence", 0.0) > 0.0:
+            reason_codes.append("recent_emergent_topic")
+        if best_candidate.factors.get("continuity", 0.0) > 0.0:
+            reason_codes.append("conversational_continuity")
+        if not reason_codes:
+            reason_codes.append("highest_weighted_score")
+
+        return SchedulerDecision(
+            decision_id=f"dec_{uuid.uuid4().hex[:8]}",
+            turn_id=turn_id,
+            selected_topic_id=best_candidate.topic_id,
+            selected_topic_number=best_candidate.topic_number,
+            previous_topic_id=previous_topic_id,
+            candidate_scores=candidate_scores,
+            reason_codes=reason_codes,
+        )

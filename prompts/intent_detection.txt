@@ -4,7 +4,7 @@
 # 2. Topic Verification Outcome: When the interviewer's previous question used the 'verify' strategy to summarize and confirm topic completeness, determine whether the interviewee accepted the summary, requested revisions, or gave an ambiguous response.
 
 # INPUT:
-- Active Topic As [current_topic]: {current_topic_content} (ID: {current_topic_id})
+- Active Topic As [current_topic]: {current_topic_content} ({current_topic_number})
 - Previous Question Strategy: {previous_question_strategy}
 - Latest Turn Exchange As [latest_turn]:
   - Interviewer Question: {interviewer_message}

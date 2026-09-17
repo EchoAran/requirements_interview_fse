@@ -7,28 +7,32 @@
    {current_topic_content}
 2. Conversation History As [conversation_record] (focus especially on the latest interviewee response):
    {current_topic_conversation_record}
-3. Target Topic Current Slot State As [current_topic_slots] (each item contains slot_number, slot_key, slot_value, state in ["empty", "filled", "uncertain", "conflict"], and is_necessary):
+3. Target Topic Current Slot State As [current_topic_slots] (each item contains slot_number, slot_key, slot_value, state in ["empty", "filled", "uncertain", "conflict"], deferred in [true, false], and is_necessary):
    {current_topic_info_slots}
 4. Cross-Topic Known Information Digest As [other_topics_summary]:
    {entire_interview_info_slots}
+5. Targeted Slot Context from Previous Question As [targeted_slot_context]:
+   {target_context}
 
 # EXTRACTION & UPDATE STEPS:
-## Step 1: Carefully examine the interviewee's latest response and extract clear business facts and requirements directly relevant to [current_topic].
+## Step 1: Carefully examine the interviewee's latest response and extract clear business facts and requirements directly relevant to [current_topic]. Consult [targeted_slot_context] to understand which slot or strategy the interviewer specifically asked about in the previous turn.
 ## Step 2: Compare against the existing slots in [current_topic_slots] using their authoritative state:
   - For an existing empty slot (state="empty"), if the interviewee provides a definite confirmed fact, populate it with the extracted fact and set operation to "update".
   - If the interviewee provides a concrete candidate value but explicitly expresses that it is tentative, subject to confirmation, or might change (e.g., "Set for three days. Still awaiting confirmation from the legal department."), set operation to "mark_uncertain" with the concrete non-empty candidate value in slot_value.
-  - If the interviewee explicitly chooses to defer, postpone, or keep a slot uncertain/tentative rather than providing further details or deciding right now (e.g., "暂记未确定", "先待定", "先记为待定", "目前只能暂定，先记为未确定", "keep as uncertain", "leave it tentative", "defer for now"), set operation to "defer_uncertain" with the current or tentative candidate value in slot_value.
+  - If the interviewee explicitly chooses to defer, postpone, or keep a slot uncertain/tentative rather than deciding right now (e.g., "keep as uncertain for now", "leave it tentative", "defer for later", "postpone this decision", "mark as uncertain", "undecided at this moment"), ALWAYS emit a proposal with operation "defer_uncertain" for that slot. If the slot already has a value, preserve that value in slot_value; if a tentative candidate was mentioned, put that candidate in slot_value; if the slot was empty and no candidate exists, set slot_value to null. Explicit deferral is an authoritative state transition and MUST be emitted even if the slot value did not change!
   - If a slot is already in uncertain status (state="uncertain") and the interviewee now explicitly confirms or finalizes the value, set operation to "update" or "refine" with the confirmed value.
   - If the interviewee's latest statement directly contradicts a previously recorded value (in a state="filled" or state="uncertain" slot), set operation to "conflict", storing the latest statement in slot_value.
   - If the interviewee introduces a substantial new requirement attribute that belongs to this topic but is not covered by existing slots, set operation to "add" (provide slot_key, slot_value, and operation "add", "mark_uncertain", or "defer_uncertain").
-## Step 3: Incremental Output: If the latest turn provides NO new facts for the target topic, return an empty array []. Do NOT return unchanged slots.
+## Step 3: Incremental Output: If the latest turn provides NO new facts and NO explicit deferral/uncertainty choices for the target topic, return an empty array []. Do NOT return unchanged slots that have no state or value modification. (Explicit deferral "defer_uncertain" is a state modification and MUST be returned).
 
 # STRICT RULES & GUARDRAILS:
-1. No Data Erasure & No Hallucinated Uncertainty: Strictly prohibit outputting "None", "null", "N/A", "unknown", or empty strings "" to indicate uncertainty. If the interviewee has no idea / does not know and there is no candidate value, do NOT output or update that slot. Do NOT use "mark_uncertain" or "defer_uncertain" because of the model's own low confidence; it must be grounded in the interviewee's explicit tentative expression or explicit deferral choice.
+1. No Data Erasure & No Hallucinated Uncertainty: Do not erase existing values with "None", "null", "N/A", "unknown", or empty strings "". Only for "defer_uncertain" on a slot with no existing or tentative value may slot_value be null. If a slot is merely unmentioned or the interviewee has no comment, do NOT output that slot. Do NOT use "mark_uncertain" or "defer_uncertain" because of the model's own low confidence. However, when the interviewee explicitly requests to defer, postpone, or set a slot as tentative/deferred, you MUST emit "defer_uncertain" for that slot.
 2. Grounded Evidence Only: Base updates strictly on explicit statements in the latest turn. Do NOT hallucinate unstated rules or speculate.
 3. Topic Boundary Discipline: Keep facts bounded to [current_topic]. Do not place requirements belonging to other topics into this topic's slots.
 4. One Proposal Per Slot: Output each existing slot_number at most once. If multiple compatible facts from the latest turn belong to the same slot, combine them into one complete slot_value. Evaluate every operation against the original [current_topic_slots] state; output items do not update the state for later items.
-5. Pure JSON Output: Output ONLY a valid JSON array matching the format below (or [] if no incremental updates exist).
+5. Complete Proposal Items: Every proposal object MUST contain the keys "slot_number", "slot_key", "slot_value", and "operation". For an existing slot, reuse its exact slot_number and slot_key from [current_topic_slots]. For a new slot, "slot_number" may be null and "slot_key" MUST be the new attribute name.
+6. Operation Vocabulary: "operation" MUST be exactly one of "add", "update", "refine", "mark_uncertain", "defer_uncertain", "conflict". Never emit any other operation value, and never omit the operation key.
+7. Pure JSON Output: Output ONLY a valid JSON array matching the format below (or [] if no incremental updates exist).
 
 # OUTPUT FORMAT (Direct pure JSON array; output [] if no incremental changes):
 [

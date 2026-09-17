@@ -100,47 +100,46 @@ semi_structured_interview_fse/
 │   ├── slots_filling.txt               # 槽位提取与冲突识别
 │   └── remarks_generation.txt          # 隔离式策略提问生成
 ├── src/
-│   └── elicitation_core/
-│       ├── config.py                   # Pydantic 强类型分层配置管理与快照
-│       ├── pipeline.py                 # 核心流程总编排器 (ElicitationPipeline)
-│       ├── llm/                        # 异步大模型交互客户端与离线重放 Client
-│       │   ├── client.py               # 异步 LLM 客户端与统一重试机制
-│       │   ├── replay_client.py        # 基于录制日志的离线确定性重放客户端
-│       │   ├── schemas.py              # LLM 调用契约与 JSON 结构化定义
-│       │   └── exceptions.py           # 传输、输出、配置等异常体系
-│       ├── models/                     # 领域核心数据模型 (Pydantic V2)
-│       │   ├── state.py                # ProjectState, SectionState, TopicState, SlotState, SlotRevision
-│       │   ├── event.py                # StateEvent, EvidenceRef (事件溯源与证据链)
-│       │   ├── turn.py                 # TurnRecord, TurnPair (对话轮次)
-│       │   ├── dependency.py           # DependencyEdge, TopicPriorityItem, PriorityResult
-│       │   ├── interpretation.py       # EvidenceInterpretation, AffectedTopic, EmergentTopicCandidate
-│       │   ├── scheduling.py           # IntentDecision, TopicSchedulingView, TopicScore, SchedulerDecision
-│       │   ├── strategy.py             # StrategyCode, QuestionPlan, QuestionGenerationInput, TargetContext
-│       │   ├── run_record.py           # UnifiedDecisionRecord, LLMCallRecord, RunError (审计模型)
-│       │   └── updates.py              # StepResult, SlotUpdateProposal, OperationSelectionResult
-│       ├── storage/                    # 存储层：原子文件持久化与 JSONL 顺序追加日志
-│       │   └── project_store.py
-│       ├── services/                   # 核心纯函数服务与算法逻辑
-│       │   ├── id_factory.py           # 唯一 ID 生成工厂
-│       │   ├── event_factory.py        # 强类型不可变事件构造工厂
-│       │   ├── state_reducer.py        # 两阶段事务状态归约推演器
-│       │   ├── state_view.py           # 只读状态视图与多因子指标提取
-│       │   ├── question_context_builder.py # 提问目标上下文与结构化输入装配
-│       │   ├── context_budget_manager.py   # 上下文 Token 预算测算与确定性梯度裁剪
-│       │   ├── validators.py           # 15 项全局状态不变量检验门禁
-│       │   └── summary_generator.py    # 结项 Markdown 需求规格生成器
-│       ├── initialization/             # 初始化子域
-│       │   ├── scaffold_generator.py   # 大纲与章节结构初始化
-│       │   ├── prefiller.py            # 初始信息提取与槽位预填
-│       │   └── dependency_builder.py   # 主题依赖拓扑构建与先验排序
-│       └── runtime/                    # 运行时交互与推理子域
-│           ├── evidence_interpreter.py # 证据跨主题关联与演化分析
-│           ├── structure_evolver.py    # 主题动态涌现、合并与依赖边演化
-│           ├── slot_filler.py          # 槽位抽取、更新与冲突标记
-│           ├── intent_controller.py    # 用户交互意图识别与置信度门禁
-│           ├── scheduler.py            # 七因子效用评分动态调度器
-│           ├── strategy_selector.py    # 六维提问策略规划器
-│           └── question_generator.py   # 结构化 Prompt 组装与问句生成
+│   ├── config.py                   # Pydantic 强类型分层配置管理与快照
+│   ├── pipeline.py                 # 核心流程总编排器 (ElicitationPipeline)
+│   ├── llm/                        # 异步大模型交互客户端与离线重放 Client
+│   │   ├── client.py               # 异步 LLM 客户端与统一重试机制
+│   │   ├── replay_client.py        # 基于录制日志的离线确定性重放客户端
+│   │   ├── schemas.py              # LLM 调用契约与 JSON 结构化定义
+│   │   └── exceptions.py           # 传输、输出、配置等异常体系
+│   ├── models/                     # 领域核心数据模型 (Pydantic V2)
+│   │   ├── state.py                # ProjectState, SectionState, TopicState, SlotState, SlotRevision
+│   │   ├── event.py                # StateEvent, EvidenceRef (事件溯源与证据链)
+│   │   ├── turn.py                 # TurnRecord, TurnPair (对话轮次)
+│   │   ├── dependency.py           # DependencyEdge, TopicPriorityItem, PriorityResult
+│   │   ├── interpretation.py       # EvidenceInterpretation, AffectedTopic, EmergentTopicCandidate
+│   │   ├── scheduling.py           # IntentDecision, TopicSchedulingView, TopicScore, SchedulerDecision
+│   │   ├── strategy.py             # StrategyCode, QuestionPlan, QuestionGenerationInput, TargetContext
+│   │   ├── run_record.py           # UnifiedDecisionRecord, LLMCallRecord, RunError (审计模型)
+│   │   └── updates.py              # StepResult, SlotUpdateProposal, OperationSelectionResult
+│   ├── storage/                    # 存储层：原子文件持久化与 JSONL 顺序追加日志
+│   │   └── project_store.py
+│   ├── services/                   # 核心纯函数服务与算法逻辑
+│   │   ├── id_factory.py           # 唯一 ID 生成工厂
+│   │   ├── event_factory.py        # 强类型不可变事件构造工厂
+│   │   ├── state_reducer.py        # 两阶段事务状态归约推演器
+│   │   ├── state_view.py           # 只读状态视图与多因子指标提取
+│   │   ├── question_context_builder.py # 提问目标上下文与结构化输入装配
+│   │   ├── context_budget_manager.py   # 上下文 Token 预算测算与确定性梯度裁剪
+│   │   ├── validators.py           # 15 项全局状态不变量检验门禁
+│   │   └── summary_generator.py    # 结项 Markdown 需求规格生成器
+│   ├── initialization/             # 初始化子域
+│   │   ├── scaffold_generator.py   # 大纲与章节结构初始化
+│   │   ├── prefiller.py            # 初始信息提取与槽位预填
+│   │   └── dependency_builder.py   # 主题依赖拓扑构建与先验排序
+│   └── runtime/                    # 运行时交互与推理子域
+│       ├── evidence_interpreter.py # 证据跨主题关联与演化分析
+│       ├── structure_evolver.py    # 主题动态涌现、合并与依赖边演化
+│       ├── slot_filler.py          # 槽位抽取、更新与冲突标记
+│       ├── intent_controller.py    # 用户交互意图识别与置信度门禁
+│       ├── scheduler.py            # 七因子效用评分动态调度器
+│       ├── strategy_selector.py    # 六维提问策略规划器
+│       └── question_generator.py   # 结构化 Prompt 组装与问句生成
 ├── scripts/                            # 核心 CLI 交互工具
 │   ├── init_project.py                 # 初始化访谈项目
 │   ├── step.py                         # 推进对话轮次

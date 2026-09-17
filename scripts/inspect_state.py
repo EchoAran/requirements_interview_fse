@@ -5,9 +5,9 @@ from pathlib import Path
 # Add src to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from elicitation_core.config import AppConfig
-from elicitation_core.storage.project_store import ProjectStore
-from elicitation_core.services.state_view import StateView
+from config import AppConfig
+from storage.project_store import ProjectStore
+from services.state_view import StateView
 
 
 def main():

@@ -8,8 +8,8 @@ from pathlib import Path
 # Add src to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from elicitation_core.config import AppConfig
-from elicitation_core.pipeline import ElicitationPipeline
+from config import AppConfig
+from pipeline import ElicitationPipeline
 
 
 async def main():
